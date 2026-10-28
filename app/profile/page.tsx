@@ -1,0 +1,11 @@
+import React from 'react';
+import AppLayout from '@/app/components/AppLayout';
+import ProfileClient from '@/app/profile/components/ProfileClient';
+
+export default function ProfilePage() {
+  return (
+    <AppLayout>
+      <ProfileClient />
+    </AppLayout>
+  );
+}
