@@ -18,7 +18,7 @@ export default function StatusBadge({ status, className = '' }: StatusBadgeProps
   const style = statusStyles[status];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none ${style.badge} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold leading-none ${style.badge} ${className}`}
     >
       <Icon name={iconByStatus[status]} size={12} variant="solid" />
       {status}

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import Topbar from '@/app/components/Topbar';
-import NavTabs from '@/app/components/NavTabs';
-import Footer from '@/app/components/Footer';
+import NavTabs, { NavTabsView } from '@/app/components/NavTabs';
+import AppFooter from '@/app/components/AppFooter';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -14,12 +14,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="mx-auto w-full max-w-screen-2xl">
           <Topbar />
           <div className="border-t border-border">
-            <NavTabs />
+            <Suspense fallback={<NavTabsView pathname={null} />}>
+              <NavTabs />
+            </Suspense>
           </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8 2xl:px-16">{children}</main>
-      <Footer />
+      <AppFooter />
     </div>
   );
 }

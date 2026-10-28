@@ -1,6 +1,13 @@
 'use client';
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AppImage from '@/app/components/ui/AppImage';
+
+const serviceRoutes: Record<string, string> = {
+  'Moving': '/book-service/moving',
+  'Furniture Assembly': '/book-service/furniture-assembly',
+  'TV Mounting': '/book-service/tv-mounting',
+};
 
 const trustBadges = [
 { icon: 'shield', label: 'Licensed & Insured' },
@@ -13,6 +20,25 @@ export default function HeroSection() {
   const [fromZip, setFromZip] = useState('');
   const [toZip, setToZip] = useState('');
   const [moveDate, setMoveDate] = useState('');
+  const router = useRouter();
+  const isMoving = serviceType === 'Moving';
+
+  // Block past dates. Set on focus so the date is read in the browser, not at prerender.
+  const setMinToToday = (e: React.FocusEvent<HTMLInputElement>) => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    e.currentTarget.min = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (fromZip) params.set('fromZip', fromZip);
+    if (isMoving && toZip) params.set('toZip', toZip);
+    if (moveDate) params.set('date', moveDate);
+    const qs = params.toString();
+    router.push(`${serviceRoutes[serviceType]}${qs ? `?${qs}` : ''}`);
+  };
 
   return (
     <section id="hero" className="relative min-h-[calc(100vh-112px)] flex items-center overflow-hidden noise-overlay">
@@ -50,7 +76,7 @@ export default function HeroSection() {
               {/* Form header */}
               <div className="mb-5">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-primary-public text-xs font-bold uppercase tracking-wider">— Get Your Free Quote</span>
+                  <span className="text-primary-public-strong text-xs font-bold uppercase tracking-wider">— Get Your Free Quote</span>
                 </div>
                 <h2 className="text-xl font-extrabold text-foreground-public tracking-tight">Quick & Easy Estimate</h2>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -58,12 +84,13 @@ export default function HeroSection() {
                 </p>
               </div>
 
-              <div className="space-y-4">
+              <form className="space-y-4" onSubmit={handleSubmit}>
                 {/* Service type */}
                 <div>
-                  <label className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">Service type</label>
+                  <label htmlFor="hero-service" className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">Service type</label>
                   <div className="relative">
                     <select
+                      id="hero-service"
                       value={serviceType}
                       onChange={(e) => setServiceType(e?.target?.value)}
                       className="w-full bg-input border border-border rounded-lg px-4 py-2.5 text-sm text-foreground-public appearance-none focus:outline-none focus:ring-2 focus:ring-primary-public/30 focus:border-primary-public transition-colors">
@@ -81,34 +108,55 @@ export default function HeroSection() {
                 {/* ZIP codes */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">From (ZIP code)</label>
+                    <label htmlFor="hero-from-zip" className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">
+                      {isMoving ? 'From (ZIP code)' : 'ZIP code'}
+                    </label>
                     <input
+                      id="hero-from-zip"
                       type="text"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      required
+                      pattern="\d{5}"
+                      maxLength={5}
+                      title="Enter a 5-digit ZIP code"
                       placeholder="e.g. 33101"
                       value={fromZip}
-                      onChange={(e) => setFromZip(e?.target?.value)}
+                      onChange={(e) => setFromZip(e.target.value.replace(/\D/g, ''))}
                       className="w-full bg-input border border-border rounded-lg px-4 py-2.5 text-sm text-foreground-public placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary-public/30 focus:border-primary-public transition-colors" />
-                    
+
                   </div>
+                  {isMoving &&
                   <div>
-                    <label className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">To (ZIP code)</label>
+                    <label htmlFor="hero-to-zip" className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">To (ZIP code)</label>
                     <input
+                      id="hero-to-zip"
                       type="text"
+                      inputMode="numeric"
+                      required
+                      pattern="\d{5}"
+                      maxLength={5}
+                      title="Enter a 5-digit ZIP code"
                       placeholder="e.g. 33101"
                       value={toZip}
-                      onChange={(e) => setToZip(e?.target?.value)}
+                      onChange={(e) => setToZip(e.target.value.replace(/\D/g, ''))}
                       className="w-full bg-input border border-border rounded-lg px-4 py-2.5 text-sm text-foreground-public placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary-public/30 focus:border-primary-public transition-colors" />
-                    
+
                   </div>
+                  }
                 </div>
 
-                {/* Move date + Home size */}
+                {/* Service date */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">Move date</label>
+                    <label htmlFor="hero-date" className="block text-xs font-semibold text-foreground-public mb-1.5 uppercase tracking-wide">
+                      {isMoving ? 'Move date' : 'Service date'}
+                    </label>
                     <div className="relative">
                       <input
+                        id="hero-date"
                         type="date"
+                        onFocus={setMinToToday}
                         value={moveDate}
                         onChange={(e) => setMoveDate(e?.target?.value)}
                         className="w-full bg-input border border-border rounded-lg px-4 py-2.5 text-sm text-foreground-public focus:outline-none focus:ring-2 focus:ring-primary-public/30 focus:border-primary-public transition-colors" />
@@ -118,7 +166,7 @@ export default function HeroSection() {
                 </div>
 
                 {/* Submit */}
-                <button className="btn-primary-public w-full py-3.5 text-base font-bold rounded-lg flex items-center justify-center gap-2 mt-1">
+                <button type="submit" className="btn-primary-public w-full py-3.5 text-base font-bold rounded-lg flex items-center justify-center gap-2 mt-1">
                   Get My Free Estimate
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -131,7 +179,7 @@ export default function HeroSection() {
                   </svg>
                   Your information is safe and secure. No obligation.
                 </p>
-              </div>
+              </form>
             </div>
           </div>
  

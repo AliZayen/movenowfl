@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppImage from '@/app/components/ui/AppImage';
 import Icon from '@/app/components/ui/AppIcon';
@@ -27,6 +28,10 @@ export default function BookingCard({ booking: b, onNotify }: BookingCardProps) 
   }, []);
 
   const closed = b.status === 'Completed' || b.status === 'Cancelled';
+  const go = (msg: string) => {
+    setOpen(false);
+    onNotify(msg);
+  };
 
   return (
     <article className="relative flex flex-col gap-4 p-4 transition-colors hover:bg-muted/30 md:flex-row md:items-center">
@@ -35,7 +40,11 @@ export default function BookingCard({ booking: b, onNotify }: BookingCardProps) 
       </div>
 
       <div className="min-w-0 md:w-[34%]">
-        <h3 className="text-lg font-bold text-foreground">{b.service}</h3>
+        <h3 className="text-lg font-bold text-foreground">
+          <Link href={`/my-bookings/${b.id}`} className="hover:text-accent-strong hover:underline">
+            {b.service}
+          </Link>
+        </h3>
         <p className="tabular mt-0.5 text-xs text-muted-foreground">Ref: {b.ref}</p>
         <p className="tabular mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Icon name="CalendarDaysIcon" size={14} />
@@ -68,65 +77,65 @@ export default function BookingCard({ booking: b, onNotify }: BookingCardProps) 
           type="button"
           aria-label={`More actions for ${b.ref}`}
           onClick={() => setOpen((v) => !v)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
         >
           <Icon name="EllipsisVerticalIcon" size={20} />
         </button>
         <button
           type="button"
           onClick={() => router?.push(`/my-bookings/${b.id}`)}
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-bold text-primary transition-all duration-150 hover:border-accent hover:text-accent active:scale-95"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-bold text-primary transition-all duration-150 hover:border-accent-strong hover:text-accent-strong active:scale-95"
         >
           View Details <Icon name="ArrowRightIcon" size={14} />
         </button>
 
         {open && (
-          <div className="absolute right-4 top-12 z-20 w-48 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-pop">
-            <button
-              type="button"
-              disabled={closed}
-              onClick={() => {
-                setOpen(false);
-                onNotify(`Reschedule request started for ${b.ref}`);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Icon name="CalendarDaysIcon" size={14} /> Reschedule
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onNotify(`Message opened with ${b.provider.name}`);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground hover:bg-muted/60"
-            >
-              <Icon name="ChatBubbleOvalLeftEllipsisIcon" size={14} /> Message provider
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onNotify(`Receipt for ${b.ref} sent to your email`);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground hover:bg-muted/60"
-            >
-              <Icon name="DocumentTextIcon" size={14} /> Email receipt
-            </button>
-            <button
-              type="button"
-              disabled={closed}
-              onClick={() => {
-                setOpen(false);
-                onNotify(`Cancellation requested for ${b.ref}`);
-              }}
-              className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-xs text-destructive hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Icon name="XCircleIcon" size={14} /> Cancel booking
-            </button>
+          <div role="menu" className="absolute right-4 top-12 z-20 w-52 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-pop">
+            {!closed && (
+              <MenuItem icon="CalendarDaysIcon" label="Reschedule" onClick={() => go(`Reschedule request started for ${b.ref}`)} />
+            )}
+            <MenuItem icon="ChatBubbleOvalLeftEllipsisIcon" label="Message provider" onClick={() => go(`Message opened with ${b.provider.name}`)} />
+            {b.status === 'Completed' && (
+              <MenuItem icon="DocumentTextIcon" label="Email receipt" onClick={() => go(`Receipt for ${b.ref} sent to your email`)} />
+            )}
+            {!closed && (
+              <MenuItem
+                icon="XCircleIcon"
+                label="Cancel booking"
+                danger
+                // Cancelling needs a confirmation step, which lives on the details page.
+                onClick={() => {
+                  setOpen(false);
+                  router.push(`/my-bookings/${b.id}#manage`);
+                }}
+              />
+            )}
           </div>
         )}
       </div>
     </article>
+  );
+}
+interface MenuItemProps {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}
+
+function MenuItem({ icon, label, onClick, danger }: MenuItemProps) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted/60 ${
+        danger ? 'border-t border-border text-destructive' : 'text-foreground'
+      }`}
+    >
+      <Icon name={icon} size={16} /> {label}
+    </button>
   );
 }

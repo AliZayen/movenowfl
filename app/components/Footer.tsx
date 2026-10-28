@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import DarkAppLogo from '@/app/components/ui/DarkAppLogo';
+import { PHONE_PRIMARY, PHONE_SECONDARY } from '@/app/lib/contact';
 
 export default function Footer() {
   return (
@@ -81,8 +82,8 @@ export default function Footer() {
                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
                 </svg>
                 <div className='flex flex-col'>
-                  <a href="tel:+13055550123" className="text-sm text-muted-foreground hover:text-primary-public transition-colors">+1 (305) 399-2144</a>
-                  <a href="tel:+16463596619" className="text-sm text-muted-foreground hover:text-primary-public transition-colors">+1 (646) 359-6619</a>
+                  <a href={PHONE_PRIMARY.href} className="text-sm text-muted-foreground hover:text-primary-public transition-colors">{PHONE_PRIMARY.display}</a>
+                  <a href={PHONE_SECONDARY.href} className="text-sm text-muted-foreground hover:text-primary-public transition-colors">{PHONE_SECONDARY.display}</a>
                 </div>
               </li>
               <li className="flex items-center gap-2">

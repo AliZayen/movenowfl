@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppLogo from '@/app/components/ui/AppLogo';
+import { PHONE_PRIMARY } from '@/app/lib/contact';
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -51,11 +52,11 @@ export default function Header() {
           <span>• Professional</span>
         </div>
         <div className="flex items-center gap-4">
-          <a href="tel:+13055550123" className="flex items-center gap-1 hover:text-primary-public transition-colors">
+          <a href={PHONE_PRIMARY.href} className="flex items-center gap-1 hover:text-primary-public transition-colors">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
             </svg>
-            +1 (305) 399-2144
+            {PHONE_PRIMARY.display}
           </a>
           <span className="text-muted-foreground">Mon - Sat 8AM - 8PM</span>
         </div>
@@ -75,7 +76,7 @@ export default function Header() {
               <Link
                 key={link?.label}
                 href={link?.href}
-                className="text-sm font-medium text-muted-foreground hover:text-primary-public transition-colors duration-200 relative group"
+                className="text-sm font-medium text-muted-foreground hover:text-primary-public-strong transition-colors duration-200 relative group"
               >
                 {link?.label}
                 <span className="absolute -bottom-0.5 left-0 w-0 h-0.5 bg-primary-public transition-all duration-300 group-hover:w-full rounded-full" />
@@ -85,11 +86,11 @@ export default function Header() {
 
           {/* CTA */}
           <div className="hidden lg:flex items-center gap-3">
-            <a href="tel:+13055550123" className="flex items-center gap-2 text-sm font-semibold text-foreground-public hover:text-primary-public transition-colors">
+            <a href={PHONE_PRIMARY.href} className="flex items-center gap-2 text-sm font-semibold text-foreground-public hover:text-primary-public-strong transition-colors">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-public">
                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
               </svg>
-              +1 (305) 399-2144
+              {PHONE_PRIMARY.display}
             </a>
             <Link
               href="/quote"
@@ -130,18 +131,18 @@ export default function Header() {
                 key={link?.label}
                 href={link?.href}
                 onClick={handleLinkClick}
-                className="text-lg font-semibold text-foreground-public hover:text-primary-public transition-colors py-3 border-b border-border"
+                className="text-lg font-semibold text-foreground-public hover:text-primary-public-strong transition-colors py-3 border-b border-border"
               >
                 {link?.label}
               </Link>
             ))}
           </nav>
           <div className="mt-8 flex flex-col gap-3">
-            <a href="tel:+13055550123" className="flex items-center justify-center gap-2 text-base font-semibold text-foreground-public border border-border rounded-lg py-3">
+            <a href={PHONE_PRIMARY.href} className="flex items-center justify-center gap-2 text-base font-semibold text-foreground-public border border-border rounded-lg py-3">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-public">
                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
               </svg>
-              Call (305) 555-0123
+              Call {PHONE_PRIMARY.display}
             </a>
             <Link
               href="/quote"

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import BookingsHeader from '@/app/my-bookings/components/BookingsHeader';
 import StatusTabs, { TabKey } from '@/app/my-bookings/components/StatusTabs';
 import BookingCard from '@/app/my-bookings/components/BookingCard';
@@ -8,14 +9,26 @@ import Pagination from '@/app/my-bookings/components/Pagination';
 import RightRail from '@/app/my-bookings/components/RightRail';
 import EmptyState from '@/app/components/ui/EmptyState';
 import Toast from '@/app/components/ui/Toast';
-import { bookings, dateRanges } from '@/app/data/mockData';
+import { bookings, dateRanges, type Booking } from '@/app/data/mockData';
 
 const PAGE_SIZE = 5;
 
-export default function MyBookingsClient() {
+// Open bookings (pending/confirmed) first, soonest first; then past ones, newest first.
+const isOpen = (b: Booking) => b.status === 'Pending' || b.status === 'Confirmed';
+const byUpcomingFirst = (a: Booking, b: Booking) => {
+  if (isOpen(a) !== isOpen(b)) return isOpen(a) ? -1 : 1;
+  return isOpen(a) ? a.isoDate.localeCompare(b.isoDate) : b.isoDate.localeCompare(a.isoDate);
+};
+
+interface MyBookingsClientProps {
+  initialTab?: TabKey;
+}
+
+export default function MyBookingsClient({ initialTab = 'All' }: MyBookingsClientProps) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [rangeId, setRangeId] = useState(dateRanges?.[2]?.id);
-  const [tab, setTab] = useState<TabKey>('All');
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [page, setPage] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
@@ -23,7 +36,7 @@ export default function MyBookingsClient() {
   const rangeFiltered = useMemo(() => {
     const range = dateRanges?.find((r) => r?.id === rangeId) ?? dateRanges?.[2];
     const q = query?.trim()?.toLowerCase();
-    return bookings?.filter((b) => b?.isoDate >= range?.from && b?.isoDate <= range?.to)?.filter((b) => !q || `${b?.service} ${b?.ref} ${b?.address} ${b?.provider?.name}`?.toLowerCase()?.includes(q))?.sort((a, b) => (a?.isoDate < b?.isoDate ? 1 : -1));
+    return bookings?.filter((b) => b?.isoDate >= range?.from && b?.isoDate <= range?.to)?.filter((b) => !q || `${b?.service} ${b?.ref} ${b?.address} ${b?.provider?.name}`?.toLowerCase()?.includes(q))?.sort(byUpcomingFirst);
   }, [query, rangeId]);
 
   const counts = useMemo(
@@ -109,7 +122,7 @@ export default function MyBookingsClient() {
       </div>
 
       <div className="xl:col-span-4">
-        <RightRail onBook={() => setToast('Booking flow opens here — pick a service to get started')} />
+        <RightRail onBook={() => router.push('/book-service')} onNotify={setToast} />
       </div>
       <Toast message={toast} onClose={closeToast} />
     </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookingPrefill } from '@/app/book-service/prefill';
 import React, { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -12,7 +13,11 @@ import TVMSummarySidebar from '@/app/book-service/tv-mounting/components/TVMSumm
 import TVMountingDetails from './TVMountingDetails';
 import JobAddress, { AddressForm }  from '@/app/book-service/components/JobAdress';
 
-export default function BookTVMServiceClient(){
+interface BookTVMServiceClientProps {
+  prefill?: BookingPrefill;
+}
+
+export default function BookTVMServiceClient({ prefill = {} }: BookTVMServiceClientProps) {
 
   const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
@@ -23,7 +28,7 @@ export default function BookTVMServiceClient(){
     street: '123 Ocean Dr',
     city: 'Miami',
     state: 'FL',
-    zip: '33101'
+    zip: prefill.fromZip ?? '33101'
   });
 
   const [floor, setFloor] = useState('Ground');
@@ -31,7 +36,7 @@ export default function BookTVMServiceClient(){
   const [parking, setParking] = useState('Street parking');
   const [access, setAccess] = useState('');
 
-  const [dateValue, setDateValue] = useState('2026-10-30');
+  const [dateValue, setDateValue] = useState(prefill.date ?? '2026-10-30');
   const [slot, setSlot] = useState('10:00 AM');
 
   const [type, setType ] = useState("Select Mounting Type");

@@ -1,44 +1,51 @@
 import React from 'react';
+import Link from 'next/link';
 import Icon from '@/app/components/ui/AppIcon';
 
-interface StatsRowProps {
-  onViewAll: () => void;
+export interface BookingCounts {
+  upcoming: number;
+  pending: number;
+  completed: number;
+  total: number;
 }
 
-const stats = [
-  { id: 'stat-upcoming', label: 'Upcoming Bookings', value: 2, icon: 'CalendarDaysIcon', tone: 'bg-accent/10 text-accent' },
-  { id: 'stat-pending', label: 'Pending Requests', value: 1, icon: 'ClockIcon', tone: 'bg-warning/10 text-warning' },
-  { id: 'stat-completed', label: 'Completed', value: 3, icon: 'CheckCircleIcon', tone: 'bg-primary text-primary-foreground' },
-  { id: 'stat-total', label: 'Total Bookings', value: 6, icon: 'CalendarDaysIcon', tone: 'bg-accent/10 text-accent' },
-];
+interface StatsRowProps {
+  counts: BookingCounts;
+}
 
-export default function StatsRow({ onViewAll }: StatsRowProps) {
+export default function StatsRow({ counts }: StatsRowProps) {
+  // Each card opens the list it counts.
+  const stats = [
+    { id: 'stat-upcoming', label: 'Upcoming', value: counts.upcoming, icon: 'CalendarDaysIcon', tone: 'bg-accent/10 text-accent-strong', href: '#upcoming' },
+    { id: 'stat-pending', label: 'Pending', value: counts.pending, icon: 'ClockIcon', tone: 'bg-warning/10 text-warning', href: '/my-bookings?status=Pending' },
+    { id: 'stat-completed', label: 'Completed', value: counts.completed, icon: 'CheckCircleIcon', tone: 'bg-success/10 text-success', href: '/my-bookings?status=Completed' },
+    { id: 'stat-total', label: 'Total', value: counts.total, icon: 'Squares2X2Icon', tone: 'bg-primary/10 text-primary', href: '/my-bookings' },
+  ];
+
   return (
-    <section aria-label="Booking summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <section aria-label="Booking summary" className="grid grid-cols-2 gap-3">
       {stats.map((s) => (
-        <div
+        <Link
           key={s.id}
-          className={`rounded-2xl border bg-card p-4 shadow-soft transition-shadow duration-150 hover:shadow-pop ${
-            s.id === 'stat-pending' ? 'border-warning/40' : 'border-border'
-          }`}
+          href={s.href}
+          aria-label={`${s.value} ${s.label.toLowerCase()} bookings, view list`}
+          className="group flex flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-soft transition-shadow duration-150 hover:shadow-pop"
         >
-          <div className="flex items-start gap-3">
-            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${s.tone}`}>
-              <Icon name={s.icon} size={22} variant={s.id === 'stat-completed' ? 'solid' : 'outline'} />
+          <div className="flex items-center gap-3">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${s.tone}`}>
+              <Icon name={s.icon} size={20} />
             </span>
-            <div className="min-w-0">
-              <p className="text-[13px] font-bold leading-tight text-foreground">{s.label}</p>
-              <p className="tabular mt-1 text-3xl font-extrabold text-foreground">{s.value}</p>
-            </div>
+            <p className="text-sm font-bold text-foreground">{s.label}</p>
           </div>
-          <button
-            type="button"
-            onClick={onViewAll}
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-accent transition-all duration-150 hover:gap-2.5"
-          >
-            View all <Icon name="ArrowRightIcon" size={16} />
-          </button>
-        </div>
+          <div className="mt-3 flex items-end justify-between">
+            <p className="tabular text-3xl font-extrabold text-foreground">{s.value}</p>
+            <Icon
+              name="ArrowRightIcon"
+              size={18}
+              className="mb-1 text-accent-strong transition-transform duration-150 group-hover:translate-x-1"
+            />
+          </div>
+        </Link>
       ))}
     </section>
   );

@@ -57,12 +57,12 @@ export default function GalleryAreasSection() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <div className="w-6 h-0.5 bg-primary-public rounded-full" />
-                  <span className="text-primary-public text-xs font-bold uppercase tracking-wider">Our Work</span>
+                  <span className="text-primary-public-strong text-xs font-bold uppercase tracking-wider">Our Work</span>
                 </div>
                 <h2 className="text-2xl font-extrabold text-foreground-public">Real moves. Real results.</h2>
                 <p className="text-muted-foreground text-sm mt-1">Check out some of our latest projects.</p>
               </div>
-              <Link href="#gallery" className="text-primary-public text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all whitespace-nowrap">
+              <Link href="#gallery" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all whitespace-nowrap">
                 View gallery
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M5 12h14M12 5l7 7-7 7" />
@@ -96,7 +96,7 @@ export default function GalleryAreasSection() {
             <div className="fade-in-up stagger-2 mb-6">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-0.5 bg-primary-public rounded-full" />
-                <span className="text-primary-public text-xs font-bold uppercase tracking-wider">Service Areas</span>
+                <span className="text-primary-public-strong text-xs font-bold uppercase tracking-wider">Service Areas</span>
               </div>
               <h2 className="text-2xl font-extrabold text-foreground-public">Where we show up.</h2>
               <p className="text-muted-foreground text-sm mt-1">Proudly serving Miami and surrounding areas.</p>
@@ -119,7 +119,7 @@ export default function GalleryAreasSection() {
               <div className="relative z-10 p-6">
                 {/* Miami label */}
                 <div className="flex items-center justify-end mb-4">
-                  <div className="bg-primary-public text-white text-sm font-bold px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+                  <div className="bg-primary-public-strong text-white text-sm font-bold px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" />
                     </svg>

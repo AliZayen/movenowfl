@@ -60,7 +60,7 @@ export default function ServicesSection() {
         <div className="mb-10 fade-in-up">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-0.5 bg-primary-public rounded-full" />
-            <span className="text-primary-public text-xs font-bold uppercase tracking-wider">Our Services</span>
+            <span className="text-primary-public-strong text-xs font-bold uppercase tracking-wider">Our Services</span>
           </div>
           <h2 className="text-section-title font-extrabold text-foreground-public">
             Three services, one request form.
@@ -96,7 +96,7 @@ export default function ServicesSection() {
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">{services?.[0]?.description}</p>
               <div className="flex items-center justify-between">
                 <span className="text-base font-bold text-foreground-public">{services?.[0]?.price}</span>
-                <Link href="#quote" className="text-primary-public text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
+                <Link href="#quote" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
                   Get a quote
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -130,7 +130,7 @@ export default function ServicesSection() {
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">{services?.[1]?.description}</p>
               <div className="flex items-center justify-between">
                 <span className="text-base font-bold text-foreground-public">{services?.[1]?.price}</span>
-                <Link href="#quote" className="text-primary-public text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
+                <Link href="#quote" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
                   Get a quote
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -164,7 +164,7 @@ export default function ServicesSection() {
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">{services?.[2]?.description}</p>
               <div className="flex items-center justify-between">
                 <span className="text-base font-bold text-foreground-public">{services?.[2]?.price}</span>
-                <Link href="#quote" className="text-primary-public text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
+                <Link href="#quote" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
                   Get a quote
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M12 5l7 7-7 7" />

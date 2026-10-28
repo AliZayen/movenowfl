@@ -4,6 +4,8 @@
   --background-public: #FFFFFF;
   --foreground-public: #0F172A;
   --primary-public: #F97316;
+  /* Darker orange for buttons and orange text on light backgrounds (5.2:1 with white, passes WCAG AA) */
+  --primary-public-strong: #C2410C;
   --primary-foreground: #FFFFFF;
   --secondary-public: #0F172A;
   --secondary-foreground-public: #FFFFFF;
@@ -14,6 +16,8 @@
   --secondary: #eef2fa;
   --secondary-foreground: #14285a;
   --accent: #EA6A0A;
+  /* Darker accent for small text and badges on white (5.2:1, passes WCAG AA) */
+  --accent-strong: #C2410C;
   --accent-foreground: #FFFFFF;
   --muted: #F8FAFC;
   --muted-foreground: #64748B;
@@ -28,13 +32,14 @@
   --navy-light: #1E293B;
   --orange-light: #FFF7ED;
   --orange-mid: #FDBA74;
-    --success: #12945a;
+  /* Status colors. Dark enough for small text on white and on their 10% tints (WCAG AA). */
+  --success: #0E7A4A;
   --success-foreground: #ffffff;
-  --warning: #e7770f;
+  --warning: #B45309;
   --warning-foreground: #ffffff;
-  --destructive: #d93a3a;
+  --destructive: #C62828;
   --destructive-foreground: #ffffff;
-  --info: #2563c9;
+  --info: #1D5BBF;
   --info-foreground: #ffffff;
 }
 
@@ -48,10 +53,20 @@
   --color-background-public: var(--background-public);
   --color-foreground-public: var(--foreground-public);
   --color-primary-public: var(--primary-public);
+  --color-primary-public-strong: var(--primary-public-strong);
   --color-secondary-public: var(--secondary-public);
   --color-secondary-foreground-public: var(--secondary-foreground-public);
 
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -188,7 +203,7 @@
   }
 
   .btn-primary-public {
-    background-color: var(--primary-public);
+    background-color: var(--primary-public-strong);
     color: var(--primary-foreground);
     font-weight: 700;
     border-radius: 0.5rem;

@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookingPrefill } from '@/app/book-service/prefill';
 import React, { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -12,7 +13,11 @@ import FASummarySidebar from '@/app/book-service/furniture-assembly/components/F
 import JobAddress, { AddressForm }  from '@/app/book-service/components/JobAdress'
 import FurnitureAssemblyDetails from './FurnitureAssemblyDetails';
 
-export default function BookFAServiceClient(){
+interface BookFAServiceClientProps {
+  prefill?: BookingPrefill;
+}
+
+export default function BookFAServiceClient({ prefill = {} }: BookFAServiceClientProps) {
 
   const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
@@ -23,7 +28,7 @@ export default function BookFAServiceClient(){
     street: '123 Ocean Dr',
     city: 'Miami',
     state: 'FL',
-    zip: '33101'
+    zip: prefill.fromZip ?? '33101'
   });
 
   const [floor, setFloor] = useState('Ground');
@@ -31,7 +36,7 @@ export default function BookFAServiceClient(){
   const [parking, setParking] = useState('Street parking');
   const [access, setAccess] = useState('');
 
-  const [dateValue, setDateValue] = useState('2026-10-30');
+  const [dateValue, setDateValue] = useState(prefill.date ?? '2026-10-30');
   const [slot, setSlot] = useState('10:00 AM');
 
   const [ type, setType ] = useState("");

@@ -73,7 +73,7 @@ export default function HowItWorksSection() {
         <div className="mb-12 fade-in-up">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-0.5 bg-primary-public rounded-full" />
-            <span className="text-primary-public text-xs font-bold uppercase tracking-wider">How It Works</span>
+            <span className="text-primary-public-strong text-xs font-bold uppercase tracking-wider">How It Works</span>
           </div>
           <h2 className="text-section-title font-extrabold text-foreground-public">
             From request to move-in day.

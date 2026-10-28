@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import AppImage from '@/app/components/ui/AppImage';
+import { PHONE_PRIMARY } from '@/app/lib/contact';
 
 const testimonials = [
 {
@@ -39,7 +40,7 @@ const faqs = [
 },
 {
   q: 'Do you offer same-day service?',
-  a: 'Yes! We offer same-day and same-week availability depending on our schedule. Call us at (305) 555-0123 to check availability.'
+  a: `Yes! We offer same-day and same-week availability depending on our schedule. Call us at ${PHONE_PRIMARY.display} to check availability.`
 },
 {
   q: 'Are packing materials included?',
@@ -55,7 +56,7 @@ const faqs = [
 },
 {
   q: 'How can I reschedule my booking?',
-  a: 'You can reschedule by calling us at (305) 555-0123 or through your account portal. We require at least 24 hours notice for rescheduling.'
+  a: `You can reschedule by calling us at ${PHONE_PRIMARY.display} or through your account portal. We require at least 24 hours notice for rescheduling.`
 }];
 
 
@@ -170,7 +171,7 @@ export default function TestimonialsFAQSection() {
             <div className="fade-in-up stagger-1 mb-6">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-0.5 bg-primary-public rounded-full" />
-                <span className="text-primary-public text-xs font-bold uppercase tracking-wider">Frequently Asked Questions</span>
+                <span className="text-primary-public-strong text-xs font-bold uppercase tracking-wider">Frequently Asked Questions</span>
               </div>
               <h2 className="text-2xl font-extrabold text-foreground-public">Quick answers to your questions.</h2>
             </div>

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Icon from '@/app/components/ui/AppIcon';
+import { PHONE_PRIMARY } from '@/app/lib/contact';
 
 interface SummaryData {
   date: string;
@@ -59,7 +60,7 @@ export default function FASummarySidebar({ summary, onNotify }: FASummarySidebar
           </span>
           <div>
             <p className="text-xs text-foreground">Need help?</p>
-            <p className="tabular text-sm font-bold text-accent">+1 (305) 555-0123</p>
+            <p className="tabular text-sm font-bold text-accent">{PHONE_PRIMARY.display}</p>
           </div>
         </div>
       </section>

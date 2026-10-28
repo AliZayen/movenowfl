@@ -2,21 +2,19 @@
 
 import React from 'react';
 import PromoBanner from '@/app/my-bookings/components/PromoBanner';
-import MiniStats from '@/app/my-bookings/components/MiniStats';
-import RailTabs from '@/app/my-bookings/components/RailTabs';
-import QuickActionsGrid from '@/app/components/QuickActionsGrid';
+import RecentMessages from '@/app/dashboard/components/RecentMessages';
 
 interface RightRailProps {
   onBook: () => void;
+  onNotify: (msg: string) => void;
 }
 
-export default function RightRail({ onBook }: RightRailProps) {
+// Kept short on purpose: the list and status tabs already show booking counts and details.
+export default function RightRail({ onBook, onNotify }: RightRailProps) {
   return (
     <div className="space-y-5">
       <PromoBanner onBook={onBook} />
-      <MiniStats />
-      <RailTabs />
-      <QuickActionsGrid onBook={onBook} compact />
+      <RecentMessages onNotify={onNotify} />
     </div>
   );
 }

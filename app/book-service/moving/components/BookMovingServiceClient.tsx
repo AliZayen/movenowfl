@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookingPrefill } from '@/app/book-service/prefill';
 import React, { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -27,7 +28,11 @@ export const volumes = [
 { id: 'unsure', label: 'Not sure' }];
 
 
-export default function BookMovingServiceClient() {
+interface BookMovingServiceClientProps {
+  prefill?: BookingPrefill;
+}
+
+export default function BookMovingServiceClient({ prefill = {} }: BookMovingServiceClientProps) {
   const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
@@ -37,14 +42,14 @@ export default function BookMovingServiceClient() {
     street: '123 Ocean Dr',
     city: 'Miami',
     state: 'FL',
-    zip: '33101'
+    zip: prefill.fromZip ?? '33101'
   });
   const [to, setTo] = useState<AddressForm>({
     saved: 'Home',
     street: '456 Brickell Ave',
     city: 'Miami',
     state: 'FL',
-    zip: '33131'
+    zip: prefill.toZip ?? '33131'
   });
   const [floor, setFloor] = useState('Ground');
   const [elevator, setElevator] = useState('Yes');
@@ -56,7 +61,7 @@ export default function BookMovingServiceClient() {
   const [specials, setSpecials] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
 
-  const [dateValue, setDateValue] = useState('2026-10-30');
+  const [dateValue, setDateValue] = useState(prefill.date ?? '2026-10-30');
   const [slot, setSlot] = useState('10:00 AM');
 
   const summary = useMemo(() => {
