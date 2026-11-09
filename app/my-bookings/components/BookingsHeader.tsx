@@ -1,15 +1,22 @@
 import React from 'react';
 import Icon from '@/app/components/ui/AppIcon';
-import { dateRanges } from '@/app/data/mockData';
+
+export interface DateRange {
+  id: string;
+  label: string;
+  from?: string;
+  to?: string;
+}
 
 interface BookingsHeaderProps {
   query: string;
   onQuery: (v: string) => void;
+  ranges: DateRange[];
   rangeId: string;
   onRange: (v: string) => void;
 }
 
-export default function BookingsHeader({ query, onQuery, rangeId, onRange }: BookingsHeaderProps) {
+export default function BookingsHeader({ query, onQuery, ranges, rangeId, onRange }: BookingsHeaderProps) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex items-center gap-3">
@@ -50,7 +57,7 @@ export default function BookingsHeader({ query, onQuery, rangeId, onRange }: Boo
             onChange={(e) => onRange(e.target.value)}
             className="h-11 w-full appearance-none rounded-xl border border-border bg-card pl-10 pr-9 text-sm font-semibold text-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-ring/20"
           >
-            {dateRanges.map((r) => (
+            {ranges.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.label}
               </option>

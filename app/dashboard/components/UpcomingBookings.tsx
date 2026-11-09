@@ -5,14 +5,15 @@ import Link from 'next/link';
 import AppImage from '@/app/components/ui/AppImage';
 import Icon from '@/app/components/ui/AppIcon';
 import StatusBadge from '@/app/components/ui/StatusBadge';
-import type { Booking } from '@/app/data/mockData';
+import type { UiBooking } from '@/app/lib/api/format';
 
 interface UpcomingBookingsProps {
   // Bookings after the one shown in NextBookingCard.
-  bookings: Booking[];
+  bookings: UiBooking[];
+  loading?: boolean;
 }
 
-export default function UpcomingBookings({ bookings }: UpcomingBookingsProps) {
+export default function UpcomingBookings({ bookings, loading }: UpcomingBookingsProps) {
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
       <div className="flex items-center justify-between">
@@ -22,7 +23,9 @@ export default function UpcomingBookings({ bookings }: UpcomingBookingsProps) {
         </Link>
       </div>
 
-      {bookings.length === 0 ? (
+      {loading ? (
+        <div aria-busy="true" className="mt-4 h-24 animate-pulse rounded-xl bg-muted/60" />
+      ) : bookings.length === 0 ? (
         <p className="mt-4 rounded-xl bg-muted/60 px-4 py-6 text-center text-sm text-muted-foreground">
           No other bookings scheduled.
         </p>

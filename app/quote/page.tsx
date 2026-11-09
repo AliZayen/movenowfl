@@ -1,6 +1,15 @@
 'use client';
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useSession } from '@/app/components/SessionProvider';
+import { api, ApiClientError, errorMessage } from '@/app/lib/api/client';
+import { OtpInput, ResendCode, useCountdown } from '@/app/components/OtpInput';
+import { uploadBookingPhotos } from '@/app/book-service/components/useSubmitBooking';
+import { checkImageFile, MAX_PHOTOS_PER_BOOKING } from '@/app/lib/uploads';
+import type { ApiBookingDetail } from '@/app/lib/api/types';
+import { formatDate } from '@/app/lib/api/format';
+import { HOME_SIZES, SPECIAL_ITEMS as SPECIAL_ITEM_OPTIONS, idOf } from '@/app/lib/catalog';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { PHONE_PRIMARY } from '@/app/lib/contact';
@@ -41,13 +50,8 @@ interface FormData {
 }
 
 // ─── Home Type Options ────────────────────────────────────────────────────────
-const HOME_TYPES = [
-  { id: 'studio', label: 'Studio', sub: '0–500 sqft' },
-  { id: '1bed', label: '1 Bedroom', sub: '500–800 sqft' },
-  { id: '2bed', label: '2 Bedrooms', sub: '800–1200 sqft' },
-  { id: '3bed', label: '3 Bedrooms', sub: '1200–1800 sqft' },
-  { id: '4bed', label: '4+ Bedrooms', sub: '1800+ sqft' },
-];
+// Same ids as the API (README 12 #1: /quote used to say 1bed, 2bed...).
+const HOME_TYPES = HOME_SIZES.map((h) => ({ id: h.id, label: h.label, sub: h.hint }));
 
 const VOLUMES = [
   { id: 'few', label: 'A few items'},
@@ -64,6 +68,24 @@ const TIME_SLOTS = [
   { id: 'evening', label: 'Evening', sub: '4pm–7pm' },
   { id: 'specific', label: 'Specific time', sub: 'I\'ll specify' },
 ];
+
+// Form values -> API values.
+const SLOT_FOR_WINDOW: Record<string, string> = { morning: '09:00', afternoon: '13:00', evening: '16:00', specific: '10:00' };
+const FLOOR_ID: Record<string, string> = { Ground: 'ground', '1st': 'ground', '2nd': '2nd', '3rd': '3rd', '4th': '4th', '5th': '5th_plus', '6th+': '5th_plus' };
+const PARKING_ID: Record<string, string> = { driveway: 'driveway', street: 'street', loading: 'loading_dock', garage: 'garage' };
+
+function toLocation(a: Address) {
+  return {
+    street: a.apt ? `${a.street} ${a.apt}` : a.street,
+    city: a.city,
+    state: 'FL',
+    zip: a.zip,
+    floor: FLOOR_ID[a.floor],
+    elevator: a.elevator ? a.elevator !== 'no' : undefined,
+    parking: PARKING_ID[a.parking],
+    accessNotes: a.access.trim() || undefined,
+  };
+}
 
 const FLEXIBILITY = [
   { id: 'exact', label: 'Exact date' },
@@ -233,11 +255,26 @@ export default function QuotePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [signInMode, setSignInMode] = useState<'signin' | 'signup'>('signin');
+  const router = useRouter();
+  const { status, user, signIn, signUp, verifyEmail } = useSession();
+  // Set once a 6-digit code has been emailed (after sign-up, or signing in to an unconfirmed account).
+  const [codeFor, setCodeFor] = useState<string | null>(null);
+  const [authCode, setAuthCode] = useState('');
+  const [resending, setResending] = useState(false);
+  const countdown = useCountdown();
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [remember, setRemember] = useState(true);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState<{ ok: boolean; text: string; href?: string; linkText?: string } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const authRef = useRef<HTMLDivElement>(null);
 
   const [form, setForm] = useState<FormData>({
     from: { street: '', apt: '', city: 'Miami', zip: '33101', floor: '', elevator: '', parking: '', access: '', type: 'home' },
     to: { street: '', apt: '', city: '', zip: '', floor: '', elevator: '', parking: '', access: '', type: 'home' },
-    moveDetails: { homeType: '1bed', volume: 'full', specialItems: ['Safe'], notes: '' },
+    moveDetails: { homeType: '1br', volume: 'full', specialItems: [], notes: '' },
     schedule: { date: '', timeSlot: 'morning', flexibility: 'exact' },
     photos: [],
     extraServices: [],
@@ -265,12 +302,110 @@ export default function QuotePage() {
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
-    const arr = Array.from(files).slice(0, 5);
-    setForm((prev) => ({ ...prev, photos: [...prev.photos, ...arr].slice(0, 5) }));
+    const ok = Array.from(files).filter((f) => !checkImageFile(f));
+    setForm((prev) => ({ ...prev, photos: [...prev.photos, ...ok].slice(0, MAX_PHOTOS_PER_BOOKING) }));
   };
 
   const removePhoto = (idx: number) => {
     setForm((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== idx) }));
+  };
+
+  const askForCode = (email: string, text: string, waitSec = 60) => {
+    setCodeFor(email);
+    setAuthCode('');
+    countdown.start(waitSec);
+    setAuthMessage({ ok: true, text });
+  };
+
+  const authenticate = async (code = authCode) => {
+    setAuthBusy(true);
+    setAuthMessage(null);
+    try {
+      if (codeFor) {
+        await verifyEmail(codeFor, code, remember);
+        setCodeFor(null);
+      } else if (signInMode === 'signin') {
+        await signIn(authEmail, authPassword, remember);
+      } else {
+        const step = await signUp({ email: authEmail, password: authPassword });
+        askForCode(step.email, step.message, step.resendInSec);
+        return;
+      }
+      setSubmitError(null);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.code === 'EMAIL_NOT_VERIFIED') askForCode(authEmail, e.message);
+      else setAuthMessage({ ok: false, text: errorMessage(e) });
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const resendCode = async () => {
+    if (!codeFor) return;
+    setResending(true);
+    try {
+      const step = await api<{ resendInSec: number }>('/auth/signup/resend', { method: 'POST', body: { email: codeFor } });
+      countdown.start(step.resendInSec);
+      setAuthMessage({ ok: true, text: `We sent a new code to ${codeFor}.` });
+    } catch (e) {
+      setAuthMessage({ ok: false, text: errorMessage(e) });
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // The reset code is entered on the sign-in page, opened in a new tab so this quote stays put.
+  const forgotPassword = async () => {
+    if (!authEmail) return setAuthMessage({ ok: false, text: 'Enter your email first' });
+    try {
+      const res = await api<{ message: string }>('/auth/password/forgot', { method: 'POST', body: { email: authEmail } });
+      setAuthMessage({
+        ok: true,
+        text: res.message,
+        href: `/signin?mode=reset&email=${encodeURIComponent(authEmail)}`,
+        linkText: 'Enter the code and a new password',
+      });
+    } catch (e) {
+      setAuthMessage({ ok: false, text: errorMessage(e) });
+    }
+  };
+
+  // POST /bookings needs an account (README 13 #3), so guests are pointed at the sign-in box first.
+  const submit = async () => {
+    setSubmitError(null);
+    if (status !== 'authenticated') {
+      setSubmitError('Sign in or create an account above to send your request.');
+      authRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (!form.from.street.trim() || !form.to.street.trim() || !form.to.city.trim()) return setSubmitError('Enter both addresses');
+    if (!form.schedule.date) return setSubmitError('Pick a move date');
+    setSubmitting(true);
+    try {
+      const { booking } = await api<{ booking: ApiBookingDetail }>('/bookings', {
+        method: 'POST',
+        body: {
+          serviceType: 'moving',
+          scheduledDate: form.schedule.date,
+          preferredSlot: SLOT_FOR_WINDOW[form.schedule.timeSlot] ?? '10:00',
+          dateFlexibility: form.schedule.flexibility,
+          origin: toLocation(form.from),
+          destination: toLocation(form.to),
+          details: {
+            homeSize: form.moveDetails.homeType,
+            volume: form.moveDetails.volume,
+            specialItems: form.moveDetails.specialItems.map((s) => idOf(SPECIAL_ITEM_OPTIONS, s)).filter(Boolean),
+          },
+          extraServices: form.extraServices,
+          notes: form.moveDetails.notes.trim() || undefined,
+        },
+      });
+      const failed = await uploadBookingPhotos(booking.id, form.photos);
+      router.push(`/my-bookings/${booking.id}?created=1${failed ? `&photosFailed=${failed}` : ''}`);
+    } catch (e) {
+      setSubmitError(errorMessage(e));
+      setSubmitting(false);
+    }
   };
 
   const homeSizeLabel = HOME_TYPES.find((h) => h.id === form.moveDetails.homeType)?.label ?? '—';
@@ -290,52 +425,130 @@ export default function QuotePage() {
           </div>
 
           {/* Sign In / Sign Up Card */}
-          <div className="bg-navy rounded-2xl my-6 p-5 text-white">
-            <h3 className="text-sm font-bold mb-1">
-              {signInMode === 'signin' ? 'Already have an account?' : 'Create an account'}
-            </h3>
-            <p className="text-xs text-white/60 mb-4">
-              {signInMode === 'signin' ? 'Sign in to save your quote and track your request.' : 'Sign up to save your quote and book faster next time.'}
-            </p>
-
-            <div className="space-y-3">
-              <input
-                type="email"
-                placeholder="Email address"
-                className="w-full px-3 py-2.5 rounded-lg bg-navy-light border border-white/10 text-white placeholder:text-white/40 text-sm focus:outline-none focus:border-primary-public"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                className="w-full px-3 py-2.5 rounded-lg bg-navy-light border border-white/10 text-white placeholder:text-white/40 text-sm focus:outline-none focus:border-primary-public"
-              />
-            </div>
-
-            {signInMode === 'signin' && (
-              <div className="flex items-center justify-between mt-3 mb-4">
-                <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
-                  <input type="checkbox" className="rounded" />
-                  Remember me
-                </label>
-                <button type="button" className="text-xs text-primary-public hover:underline">Forgot password?</button>
-              </div>
-            )}
-
-            <div className="mt-4 space-y-2">
-              <button type="button" className="w-full btn-primary-public py-2.5 rounded-lg text-sm font-bold">
-                {signInMode === 'signin' ? 'Sign in' : 'Create account'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSignInMode(signInMode === 'signin' ? 'signup' : 'signin')}
-                className="w-full py-2.5 rounded-lg text-sm font-bold border border-white/20 text-white hover:bg-white/10 transition-colors"
+          <div ref={authRef} className="bg-navy rounded-2xl my-6 p-5 text-white">
+            {status === 'authenticated' ? (
+              <p className="text-sm">
+                Signed in as <strong>{user?.fullName || user?.email}</strong>. Your request will be saved to your account.
+              </p>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  authenticate();
+                }}
               >
-                {signInMode === 'signin' ? 'Sign up' : 'Sign in instead'}
-              </button>
-            </div>
+                <h3 className="text-sm font-bold mb-1">{codeFor ? 'Confirm your email' : signInMode === 'signin' ? 'Already have an account?' : 'Create an account'}</h3>
+                <p className="text-xs text-white/60 mb-4">
+                  {codeFor
+                    ? `Enter the 6-digit code we sent to ${codeFor}.`
+                    : signInMode === 'signin'
+                      ? 'Sign in to save your quote and track your request.'
+                      : 'Sign up to save your quote and book faster next time.'}
+                </p>
+                {authMessage && (
+                  <p role={authMessage.ok ? 'status' : 'alert'} className={`mb-3 rounded-lg px-3 py-2 text-xs font-medium ${authMessage.ok ? 'bg-white/10 text-white' : 'bg-red-500/20 text-red-100'}`}>
+                    {authMessage.text}
+                    {authMessage.href && (
+                      <>
+                        {' '}
+                        <a href={authMessage.href} target="_blank" rel="noopener" className="font-bold text-primary-public underline">
+                          {authMessage.linkText} ↗
+                        </a>
+                      </>
+                    )}
+                  </p>
+                )}
+                {codeFor ? (
+                  <div className="space-y-3">
+                    <label htmlFor="quote-code" className="sr-only">
+                      6-digit code
+                    </label>
+                    <OtpInput
+                      id="quote-code"
+                      value={authCode}
+                      onChange={setAuthCode}
+                      onComplete={(c) => void authenticate(c)}
+                      autoFocus
+                      className="border-white/10 bg-navy-light text-white placeholder:text-white/30"
+                    />
+                    <ResendCode secondsLeft={countdown.left} busy={resending} onResend={resendCode} className="text-xs text-white/60" />
+                    <button
+                      type="submit"
+                      disabled={authBusy || authCode.length !== 6}
+                      className="w-full btn-primary-public py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
+                    >
+                      {authBusy ? 'Checking…' : 'Verify email'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCodeFor(null);
+                        setAuthMessage(null);
+                      }}
+                      className="w-full py-2.5 rounded-lg text-sm font-bold border border-white/20 text-white hover:bg-white/10 transition-colors"
+                    >
+                      Use a different email
+                    </button>
+                  </div>
+                ) : (
+                <>
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="sr-only">Email address</span>
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      placeholder="Email address"
+                      className="w-full px-3 py-2.5 rounded-lg bg-navy-light border border-white/10 text-white placeholder:text-white/40 text-sm focus:outline-none focus:border-primary-public"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="sr-only">Password</span>
+                    <input
+                      type="password"
+                      autoComplete={signInMode === 'signin' ? 'current-password' : 'new-password'}
+                      required
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      placeholder={signInMode === 'signin' ? 'Password' : 'Password (8+ characters, a letter and a number)'}
+                      className="w-full px-3 py-2.5 rounded-lg bg-navy-light border border-white/10 text-white placeholder:text-white/40 text-sm focus:outline-none focus:border-primary-public"
+                    />
+                  </label>
+                </div>
+                {signInMode === 'signin' && (
+                  <div className="flex items-center justify-between mt-3 mb-4">
+                    <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+                      <input type="checkbox" className="rounded" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                      Remember me
+                    </label>
+                    <button type="button" onClick={forgotPassword} className="text-xs text-primary-public hover:underline">
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+                <div className="mt-4 space-y-2">
+                  <button type="submit" disabled={authBusy} className="w-full btn-primary-public py-2.5 rounded-lg text-sm font-bold disabled:opacity-60">
+                    {authBusy ? 'Please wait…' : signInMode === 'signin' ? 'Sign in' : 'Create account'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMessage(null);
+                      setSignInMode(signInMode === 'signin' ? 'signup' : 'signin');
+                    }}
+                    className="w-full py-2.5 rounded-lg text-sm font-bold border border-white/20 text-white hover:bg-white/10 transition-colors"
+                  >
+                    {signInMode === 'signin' ? 'Sign up' : 'Sign in instead'}
+                  </button>
+                </div>
+                </>
+                )}
+              </form>
+            )}
           </div>
-
-
 
           {/* ── Two-column layout ─────────────────────────────────── */}
           <div className="flex flex-col xl:flex-row gap-6">
@@ -544,7 +757,7 @@ export default function QuotePage() {
                     <line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
                   <p className="text-sm font-semibold text-foreground-public">Drag & drop photos here</p>
-                  <p className="text-xs text-muted-foreground mt-1">or click to browse — up to 5 photos</p>
+                  <p className="text-xs text-muted-foreground mt-1">or click to browse — up to 10 photos, 10 MB each</p>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -622,6 +835,11 @@ export default function QuotePage() {
                 </div>
               </div>
 
+              {submitError && (
+                <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                  {submitError}
+                </p>
+              )}
               {/* ── Bottom Actions ─────────────────────────────────── */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-border flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -639,9 +857,11 @@ export default function QuotePage() {
                   </Link>
                   <button
                     type="button"
-                    className="btn-primary-public px-8 py-3 rounded-xl text-sm font-bold flex items-center gap-2"
+                    onClick={submit}
+                    disabled={submitting}
+                    className="btn-primary-public px-8 py-3 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-60"
                   >
-                    Continue to contact details
+                    {submitting ? 'Sending request…' : 'Request my move'}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
@@ -667,7 +887,7 @@ export default function QuotePage() {
                 <div className="space-y-3">
                   {[
                     { icon: '🚚', label: 'Service type', value: 'Moving' },
-                    { icon: '📅', label: 'Move date', value: form.schedule.date || 'Not selected' },
+                    { icon: '📅', label: 'Move date', value: form.schedule.date ? formatDate(form.schedule.date) : 'Not selected' },
                     { icon: '📍', label: 'From ZIP', value: form.from.zip || '—' },
                     { icon: '🏁', label: 'To ZIP', value: form.to.zip || '—' },
                     { icon: '🏠', label: 'Home size', value: homeSizeLabel },

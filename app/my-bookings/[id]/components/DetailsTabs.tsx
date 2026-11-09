@@ -1,40 +1,96 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import AppImage from '@/app/components/ui/AppImage';
-import Icon from '@/app/components/ui/AppIcon';
-import type { Booking, BookingStatus } from '@/app/data/mockData';
+import BookingPhotos from '@/app/my-bookings/[id]/components/BookingPhotos';
+import { api, errorMessage } from '@/app/lib/api/client';
+import type { ApiBookingDetail } from '@/app/lib/api/types';
+import {
+  BRACKETS,
+  EXTRA_SERVICES,
+  FLOORS,
+  FURNITURE_TYPES,
+  HOME_SIZES,
+  MOVE_VOLUMES,
+  PARKING,
+  SPECIAL_ITEMS,
+  TV_MOUNT_TYPES,
+  TV_SIZES,
+  WALL_TYPES,
+} from '@/app/lib/catalog';
 
 interface DetailsTabsProps {
-  booking: Booking;
-  status: BookingStatus;
+  booking: ApiBookingDetail;
+  onUpdated: (booking: ApiBookingDetail, message: string) => void;
   onNotify: (msg: string) => void;
 }
 
-type TabId = 'instructions' | 'photos';
-
+type TabId = 'request' | 'instructions' | 'photos';
 const tabs: { id: TabId; label: string }[] = [
+  { id: 'request', label: 'Your request' },
   { id: 'instructions', label: 'Special Instructions' },
   { id: 'photos', label: 'Photos' },
 ];
 
-const MAX_PHOTOS = 5;
+const label = (opts: readonly { id: string; label: string }[], id: unknown) => opts.find((o) => o.id === id)?.label ?? '—';
+const yesNo = (v: unknown) => (v === true ? 'Yes' : v === false ? 'No' : '—');
 
-export default function DetailsTabs({ booking: b, status, onNotify }: DetailsTabsProps) {
-  const [tab, setTab] = useState<TabId>('instructions');
-  const [special, setSpecial] = useState('');
-  const [saved, setSaved] = useState('');
-  const [files, setFiles] = useState<string[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ instructions: null, photos: null });
-  const editable = status === 'Pending' || status === 'Confirmed';
+/** Service details stored as ids → rows of label/value for display. */
+export function requestRows(b: ApiBookingDetail): [string, string][] {
+  const d = (b.details ?? {}) as Record<string, unknown>;
+  const access = (side: 'origin' | 'destination', name: string): [string, string][] => {
+    const a = b[side];
+    if (!a) return [];
+    return [[`${name} access`, [label(FLOORS, a.floor) !== '—' ? `${label(FLOORS, a.floor)} floor` : null, a.elevator === null ? null : a.elevator ? 'elevator' : 'no elevator', a.parking ? label(PARKING, a.parking).toLowerCase() : null].filter(Boolean).join(', ') || '—']];
+  };
+  if (b.serviceType === 'moving') {
+    const specials = (d.specialItems as string[] | undefined) ?? [];
+    return [
+      ['Home size', label(HOME_SIZES, d.homeSize)],
+      ['Volume', label(MOVE_VOLUMES, d.volume)],
+      ['Special items', specials.length ? specials.map((s) => label(SPECIAL_ITEMS, s)).join(', ') : 'None'],
+      ['Extra services', b.extraServices.length ? b.extraServices.map((s) => label(EXTRA_SERVICES, s)).join(', ') : 'None'],
+      ...access('origin', 'Pickup'),
+      ...access('destination', 'Drop-off'),
+    ];
+  }
+  if (b.serviceType === 'furniture_assembly') {
+    return [
+      ['Furniture', label(FURNITURE_TYPES, d.furnitureType)],
+      ['Items', String(d.itemCount ?? 1)],
+      ['Brand / model', [d.brand, d.model].filter(Boolean).join(' ') || '—'],
+      ['Has instructions', yesNo(d.hasInstructions)],
+      ['Wall anchoring', yesNo(d.needsWallAnchoring)],
+      ...access('origin', 'Job'),
+    ];
+  }
+  return [
+    ['Mounting', label(TV_MOUNT_TYPES, d.mountType)],
+    ['TV size', label(TV_SIZES, d.tvSize)],
+    ['Wall', label(WALL_TYPES, d.wallType)],
+    ['Bracket', label(BRACKETS, d.bracket)],
+    ['TVs', String(d.tvCount ?? 1)],
+    ['Power outlet needed', yesNo(d.needsPowerOutlet)],
+    ...access('origin', 'Job'),
+  ];
+}
 
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    const next = [...files, ...Array.from(list).map((f) => f.name)];
-    if (next.length > MAX_PHOTOS - 1) onNotify(`Up to ${MAX_PHOTOS} photos per booking`);
-    // TODO: upload via POST /uploads, then POST /bookings/:id/photos
-    setFiles(next.slice(0, MAX_PHOTOS - 1));
+export default function DetailsTabs({ booking: b, onUpdated, onNotify }: DetailsTabsProps) {
+  const [tab, setTab] = useState<TabId>('request');
+  const [notes, setNotes] = useState(b.notes ?? '');
+  const [saving, setSaving] = useState(false);
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ request: null, instructions: null, photos: null });
+  const editable = b.permissions.canModify;
+
+  const saveNotes = async () => {
+    setSaving(true);
+    try {
+      const { booking } = await api<{ booking: ApiBookingDetail }>(`/bookings/${b.id}`, { method: 'PATCH', body: { notes: notes.trim() || null } });
+      onUpdated(booking, 'Special instructions saved');
+    } catch (e) {
+      onNotify(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Arrow keys move between tabs (WAI-ARIA tabs pattern).
@@ -64,9 +120,7 @@ export default function DetailsTabs({ booking: b, status, onNotify }: DetailsTab
               aria-controls={`panel-${t.id}`}
               tabIndex={active ? 0 : -1}
               onClick={() => setTab(t.id)}
-              className={`relative shrink-0 py-3.5 text-sm font-semibold transition-colors ${
-                active ? 'text-accent-strong' : 'text-muted-foreground hover:text-primary'
-              }`}
+              className={`relative shrink-0 py-3.5 text-sm font-semibold transition-colors ${active ? 'text-accent-strong' : 'text-muted-foreground hover:text-primary'}`}
             >
               {t.label}
               <span className={`absolute inset-x-0 bottom-0 h-0.5 bg-accent-strong ${active ? 'opacity-100' : 'opacity-0'}`} />
@@ -76,6 +130,23 @@ export default function DetailsTabs({ booking: b, status, onNotify }: DetailsTab
       </div>
 
       <div className="p-5">
+        {tab === 'request' && (
+          <dl id="panel-request" role="tabpanel" aria-labelledby="tab-request" className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+            {requestRows(b).map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-muted-foreground">{k}</dt>
+                <dd className="text-sm font-semibold text-foreground">{v}</dd>
+              </div>
+            ))}
+            {b.origin.accessNotes && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-muted-foreground">Access instructions</dt>
+                <dd className="text-sm text-foreground">{b.origin.accessNotes}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+
         {tab === 'instructions' && (
           <div id="panel-instructions" role="tabpanel" aria-labelledby="tab-instructions" className="space-y-3">
             {editable ? (
@@ -86,76 +157,36 @@ export default function DetailsTabs({ booking: b, status, onNotify }: DetailsTab
                 <textarea
                   id="special"
                   rows={4}
-                  maxLength={500}
-                  value={special}
-                  onChange={(e) => setSpecial(e.target.value)}
+                  maxLength={1000}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                   placeholder="e.g. Use the loading dock on 2nd Ave. Building code 1234."
                   className="w-full resize-none rounded-lg border border-border bg-card p-3 text-sm placeholder:text-muted-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-ring/20"
                 />
                 <div className="flex items-center justify-between">
-                  <span className="tabular text-xs text-muted-foreground">{special.length}/500</span>
+                  <span className="tabular text-xs text-muted-foreground">{notes.length}/1000</span>
                   <button
                     type="button"
-                    disabled={special === saved}
-                    onClick={() => {
-                      // TODO: PATCH /bookings/:id { notes }
-                      setSaved(special);
-                      onNotify('Special instructions saved');
-                    }}
+                    disabled={saving || notes.trim() === (b.notes ?? '')}
+                    onClick={saveNotes}
                     className="min-h-11 rounded-lg bg-accent-strong px-6 text-sm font-bold text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Save instructions
+                    {saving ? 'Saving…' : 'Save instructions'}
                   </button>
                 </div>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">{saved || 'No special instructions were added to this booking.'}</p>
-            )}
-          </div>
-        )}
-
-        {tab === 'photos' && (
-          <div id="panel-photos" role="tabpanel" aria-labelledby="tab-photos" className="space-y-4">
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <li className="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-                <AppImage src={b.image} alt={b.imageAlt} fill sizes="200px" className="object-cover" />
-              </li>
-              {files.map((f, i) => (
-                <li key={`${f}-${i}`} className="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted/40 p-2 text-center">
-                  <Icon name="PhotoIcon" size={20} className="text-muted-foreground" />
-                  <span className="w-full truncate text-xs text-foreground">{f}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFiles(files.filter((_, idx) => idx !== i))}
-                    className="text-xs font-semibold text-destructive hover:underline"
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {editable && files.length < MAX_PHOTOS - 1 && (
               <>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => addFiles(e.target.files)}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-dashed border-border px-4 text-sm font-semibold text-foreground hover:bg-muted"
-                >
-                  <Icon name="ArrowUpTrayIcon" size={18} /> Add photos
-                  <span className="text-xs font-normal text-muted-foreground">({1 + files.length}/{MAX_PHOTOS})</span>
-                </button>
+                <p className="text-sm text-foreground">{b.notes || 'No special instructions were added to this booking.'}</p>
+                {(b.status === 'pending' || b.status === 'confirmed') && (
+                  <p className="text-xs text-muted-foreground">Changes are closed within 24 hours of your arrival window. Please call us instead.</p>
+                )}
               </>
             )}
           </div>
         )}
+
+        {tab === 'photos' && <BookingPhotos booking={b} onUpdated={onUpdated} onNotify={onNotify} />}
       </div>
     </section>
   );

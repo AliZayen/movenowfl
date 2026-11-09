@@ -11,9 +11,10 @@ export interface BookingCounts {
 
 interface StatsRowProps {
   counts: BookingCounts;
+  loading?: boolean;
 }
 
-export default function StatsRow({ counts }: StatsRowProps) {
+export default function StatsRow({ counts, loading }: StatsRowProps) {
   // Each card opens the list it counts.
   const stats = [
     { id: 'stat-upcoming', label: 'Upcoming', value: counts.upcoming, icon: 'CalendarDaysIcon', tone: 'bg-accent/10 text-accent-strong', href: '#upcoming' },
@@ -38,7 +39,7 @@ export default function StatsRow({ counts }: StatsRowProps) {
             <p className="text-sm font-bold text-foreground">{s.label}</p>
           </div>
           <div className="mt-3 flex items-end justify-between">
-            <p className="tabular text-3xl font-extrabold text-foreground">{s.value}</p>
+            <p className="tabular text-3xl font-extrabold text-foreground">{loading ? '–' : s.value}</p>
             <Icon
               name="ArrowRightIcon"
               size={18}

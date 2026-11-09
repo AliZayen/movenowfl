@@ -7,15 +7,18 @@ import AppImage from '@/app/components/ui/AppImage';
 import Icon from '@/app/components/ui/AppIcon';
 import StatusBadge from '@/app/components/ui/StatusBadge';
 import Avatar from '@/app/components/ui/Avatar';
-import { Booking } from '@/app/data/mockData';
+import type { UiBooking } from '@/app/lib/api/format';
+import { PHONE_PRIMARY } from '@/app/lib/contact';
+import { useMessageBooking } from '@/app/lib/api/messaging';
 
 interface BookingCardProps {
-  booking: Booking;
+  booking: UiBooking;
   onNotify: (msg: string) => void;
 }
 
 export default function BookingCard({ booking: b, onNotify }: BookingCardProps) {
   const router = useRouter();
+  const message = useMessageBooking(onNotify);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -27,7 +30,7 @@ export default function BookingCard({ booking: b, onNotify }: BookingCardProps) 
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const closed = b.status === 'Completed' || b.status === 'Cancelled';
+  const closed = b.status !== 'Pending' && b.status !== 'Confirmed'; // only open bookings can change
   const go = (msg: string) => {
     setOpen(false);
     onNotify(msg);
@@ -60,16 +63,20 @@ export default function BookingCard({ booking: b, onNotify }: BookingCardProps) 
         <div>
           <StatusBadge status={b.status} />
         </div>
-        <div className="flex items-center gap-3">
-          <Avatar src={b.provider.avatar} alt={b.provider.avatarAlt} size={40} />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-foreground">{b.provider.name}</p>
-            <p className="tabular flex items-center gap-1 text-xs text-muted-foreground">
-              <Icon name="StarIcon" size={13} variant="solid" className="text-accent" />
-              {b.provider.rating.toFixed(1)} ({b.provider.reviews} reviews)
-            </p>
+        {b.provider ? (
+          <div className="flex items-center gap-3">
+            {b.provider.avatar && <Avatar src={b.provider.avatar} alt={b.provider.avatarAlt} size={40} />}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-foreground">{b.provider.name}</p>
+              <p className="tabular flex items-center gap-1 text-xs text-muted-foreground">
+                <Icon name="StarIcon" size={13} variant="solid" className="text-accent" />
+                {b.provider.rating.toFixed(1)} ({b.provider.reviews} reviews)
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Matching you with a pro…</p>
+        )}
       </div>
 
       <div ref={ref} className="flex items-center justify-between gap-3 md:flex-col md:items-end md:justify-between md:self-stretch">
@@ -94,11 +101,22 @@ export default function BookingCard({ booking: b, onNotify }: BookingCardProps) 
         {open && (
           <div role="menu" className="absolute right-4 top-12 z-20 w-52 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-pop">
             {!closed && (
-              <MenuItem icon="CalendarDaysIcon" label="Reschedule" onClick={() => go(`Reschedule request started for ${b.ref}`)} />
+              <MenuItem
+                icon="CalendarDaysIcon"
+                label="Reschedule"
+                onClick={() => {
+                  setOpen(false);
+                  router.push(`/my-bookings/${b.id}#manage`);
+                }}
+              />
             )}
-            <MenuItem icon="ChatBubbleOvalLeftEllipsisIcon" label="Message provider" onClick={() => go(`Message opened with ${b.provider.name}`)} />
+            <MenuItem
+              icon="ChatBubbleOvalLeftEllipsisIcon"
+              label={message.busyId === b.id ? 'Opening…' : b.provider ? 'Message provider' : 'Message us'}
+              onClick={() => message.start(b.id)}
+            />
             {b.status === 'Completed' && (
-              <MenuItem icon="DocumentTextIcon" label="Email receipt" onClick={() => go(`Receipt for ${b.ref} sent to your email`)} />
+              <MenuItem icon="DocumentTextIcon" label="Email receipt" onClick={() => go(`Email receipts are coming soon. Call us at ${PHONE_PRIMARY.display} if you need one now.`)} />
             )}
             {!closed && (
               <MenuItem

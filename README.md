@@ -2,14 +2,15 @@
 
 MoveNowFL is a booking platform for home services in South Florida: **Moving**, **Furniture Assembly**, and **TV Mounting**. Customers request a service, a provider (pro) is assigned and confirms it, and the customer tracks, messages, reschedules, or cancels the booking from their dashboard.
 
-**Current state:** the frontend is built (Next.js 16, React 19, Tailwind 4). **There is no backend yet.** Every page reads from hard-coded mock data or local component state, and every action (book, cancel, message, save profile) only shows a toast.
+**Current state:** the frontend is built (Next.js 16, React 19, Tailwind 4). The **backend API is built** for auth, profile and preferences, saved addresses, the service catalog, quotes and booking requests, availability, bookings, the booking timeline, providers, service areas, messaging and photo storage, on PostgreSQL with Prisma 7. See **[Backend](#backend)**. The pages are **connected to the API**: sign-in, booking forms, dashboard, My Bookings, booking details, messages and profile all use real data. Notifications and payments still have no backend, so those parts say "coming soon" or show placeholders.
 
-This README describes everything the backend has to provide so the existing UI can work for real.
+This README describes everything the backend has to provide so the existing UI can work for real. Sections 2–14 are the original requirements; [Backend](#backend) describes what is implemented.
 
 ---
 
 ## Contents
 
+- [Backend (implemented)](#backend)
 1. [Quick start (frontend)](#1-quick-start-frontend)
 2. [Backend scope at a glance](#2-backend-scope-at-a-glance)
 3. [Recommended stack](#3-recommended-stack)
@@ -27,6 +28,246 @@ This README describes everything the backend has to provide so the existing UI c
 
 ---
 
+## Backend
+
+The API runs inside the Next.js app as Route Handlers under `app/api/v1`, backed by PostgreSQL through Prisma 7.
+
+### Setup
+
+You need Node 20+ and PostgreSQL 15+.
+
+1. Install packages. This also generates the Prisma client into `generated/prisma`.
+
+   ```bash
+   npm install
+   ```
+
+2. Copy `.env.example` to `.env`, then set `DATABASE_URL` to your database and `AUTH_SECRET` to a random string of 32+ characters.
+
+3. Create the tables:
+
+   ```bash
+   npm run db:migrate
+   ```
+
+4. Load the demo data: services, areas, 6 providers, the mock bookings, and three accounts: `john.doe@movenow.test` (customer), `admin@movenow.test` (admin) and `mike.rodriguez@movenow.test` (pro, Mike Rodriguez). All three use the password in `SEED_DEMO_PASSWORD`. The other seeded pros have no password; they can set one with "Forgot password".
+
+   ```bash
+   npm run db:seed
+   ```
+
+5. Start the app:
+
+   ```bash
+   npm run dev
+   ```
+
+   Check http://localhost:3000/api/health returns `{"status":"ok","database":"up"}`.
+
+| Script | What it does |
+|---|---|
+| `npm run db:migrate` | Create/apply migrations in development (`prisma migrate dev`) |
+| `npm run db:deploy` | Apply migrations in production (`prisma migrate deploy`) |
+| `npm run db:seed` | Load demo data (safe to run again) |
+| `npm run db:studio` | Browse the data in Prisma Studio |
+| `npm test` | Unit and integration tests (see [Tests](#tests)) |
+| `npm run test:e2e` | HTTP end-to-end tests against a production build |
+
+> **Prisma 7 notes:** the database URL is in [prisma.config.ts](prisma.config.ts), not in the schema. The client uses the `@prisma/adapter-pg` driver adapter. `migrate dev` no longer runs `generate` or the seed for you (the `postinstall` script runs `generate`).
+
+### Code layout
+
+| Path | What it holds |
+|---|---|
+| [prisma/schema.prisma](prisma/schema.prisma) | Tables, enums and indexes (README §5) |
+| [prisma/migrations](prisma/migrations) | SQL migrations |
+| [prisma/seed.ts](prisma/seed.ts) | Demo data matching `app/data/mockData.ts` |
+| [app/lib/catalog.ts](app/lib/catalog.ts) | Form option IDs ↔ UI labels for every service (one place, per §9.2). Safe for client code. |
+| [app/lib/validation/](app/lib/validation) | Zod schemas for every request. Safe to reuse in client forms. |
+| [app/lib/server/http.ts](app/lib/server/http.ts) | `handler()` wrapper: error format, origin check, request IDs, no caching |
+| [app/lib/server/auth.ts](app/lib/server/auth.ts) | Passwords, sessions, role checks |
+| [app/lib/server/otp.ts](app/lib/server/otp.ts) | 6-digit email codes for sign-up and password reset |
+| [app/lib/server/bookings.ts](app/lib/server/bookings.ts) | Booking list/stats/details, create, modify, reschedule, cancel, admin dispatch |
+| [app/lib/server/messaging.ts](app/lib/server/messaging.ts) | Conversations: seats, unread counts, posting, moderation |
+| [app/lib/server/booking-conversation.ts](app/lib/server/booking-conversation.ts) | Opens a booking's conversation with the welcome message; sets or replaces its moderator |
+| [app/lib/server/availability.ts](app/lib/server/availability.ts) | Time slots and the double-booking guard |
+| [app/lib/server/pricing.ts](app/lib/server/pricing.ts) | Price and duration estimates (placeholder rules) |
+| [app/lib/server/lifecycle.ts](app/lib/server/lifecycle.ts) | Allowed status changes (§6) |
+| [app/api/v1/](app/api/v1) | Route Handlers, one folder per endpoint |
+
+### Endpoints
+
+All responses are JSON, and errors use the §7.1 shape `{ error: { code, message, fields? } }`. 🔒 = needs a signed-in session; 🛠 = admin only.
+
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /auth/signup` → `POST /auth/signup/verify` (+ `POST /auth/signup/resend`) · `POST /auth/signin` · `POST /auth/signout` · `GET /auth/session` 🔒 · `POST /auth/password/forgot` → `POST /auth/password/reset` · `POST /auth/password/change` 🔒 · `POST /auth/verify-email` 🔒 · `POST /auth/verify-email/resend` 🔒 |
+| Profile & preferences | `GET/PATCH/DELETE /me` 🔒 · `PATCH /me/preferences` 🔒 |
+| Saved addresses | `GET/POST /me/addresses` 🔒 · `PATCH/DELETE /me/addresses/:id` 🔒 · `POST /me/addresses/:id/default` 🔒 |
+| Service catalog | `GET /services` · `GET /services/:type/options` |
+| Service areas | `GET /service-areas` · `GET /service-areas/check?zip=` |
+| Availability | `GET /availability?service=&zip=&date=` |
+| Quotes | `POST /quotes/estimate` (same body as `POST /bookings`) |
+| Bookings | `GET/POST /bookings` 🔒 · `GET /bookings/stats` 🔒 · `GET/PATCH /bookings/:id` 🔒 · `POST /bookings/:id/reschedule` 🔒 · `POST /bookings/:id/cancel` 🔒 |
+| Booking timeline | Included in `GET /bookings/:id` as `events` (raw history) and `timeline.steps` (the four progress steps) |
+| Providers | `GET /providers?service=&zip=` · `GET /providers/:id` · `GET /providers/:id/reviews` |
+| Messaging | `GET/POST /conversations` 🔒 · `GET /conversations/unread-count` 🔒 · `GET /conversations/:id` 🔒 · `PATCH /conversations/:id { closed }` 🔒 (moderator/support) · `GET/POST /conversations/:id/messages` 🔒 · `DELETE /conversations/:id/messages/:messageId` 🔒 (moderator/support) · `POST /conversations/:id/read` 🔒 |
+| Photos | `POST /me/avatar` 🔒 · `DELETE /me/avatar` 🔒 · `GET /avatars/:file` · `POST /bookings/:id/photos` 🔒 · `GET/DELETE /bookings/:id/photos/:photoId` 🔒 (`?size=thumb`) |
+| Admin (staff, see [Admin area](#admin-area)) | `GET /admin/me` · `GET /admin/overview` · `GET /admin/bookings` · `GET /admin/bookings/:id` · `POST /admin/bookings/:id/confirm` · `…/assign` · `…/status` · `…/cancel` · `GET/POST /admin/providers` · `PATCH /admin/providers/:id` · `GET /admin/customers` · `GET /admin/customers/:id` · `GET/POST /admin/staff` · `PATCH /admin/staff/:id` · `GET/POST /admin/availability-blocks` · `DELETE /admin/availability-blocks/:id` · `GET /admin/audit` · staff sign-in step 2: `POST /auth/signin/verify` |
+| Health | `GET /api/health` |
+
+All paths except health are under `/api/v1`. Request and response shapes follow §7. Where they differ:
+- Status and service values are lower-case IDs (`pending`, `tv_mounting`); each booking also carries `serviceLabel`.
+- `GET /bookings` has `sort=upcomingFirst` (the default): open bookings soonest first, then past ones newest first.
+- `GET /conversations/:id/messages` returns messages oldest first with `hasMore`. `?before=<createdAt>` loads older ones; `?after=<createdAt>` returns only newer ones (used for polling).
+- `GET /bookings/:id` accepts the UUID or the ref (`MN-2026-0001`). It includes `permissions: { canCancel, canModify, canReschedule }`, so the UI doesn't have to repeat the rules.
+
+### How the main rules work
+
+- **Sessions:** a random token sits in an HTTP-only, `SameSite=Lax` cookie (`mn_session`), and the database stores only its HMAC (keyed by `AUTH_SECRET`). "Remember me" keeps the session 30 days, sliding forward with use. Otherwise the cookie ends with the browser and the server copy after 1 day. Changing your password signs out your other sessions, and a reset signs out all of them.
+- **Email codes (OTP):** sign-up and password reset use a 6-digit code sent by email, not a link.
+  - **Sign-up** is two steps. `POST /auth/signup` checks the details and emails a code; no account exists and nobody is signed in yet (the password waits, hashed, next to the code). `POST /auth/signup/verify { email, code }` creates the account with the email confirmed and signs in.
+  - **Sign-in** with the right password on an account whose email was never confirmed returns 403 `EMAIL_NOT_VERIFIED` and emails a code; the sign-in page then shows the code step. Accounts from before codes existed can also confirm from Profile (`/auth/verify-email` + `/resend`, signed in).
+  - **Password reset:** `POST /auth/password/forgot { email }` emails a code (same answer whether or not the account exists). `POST /auth/password/reset { email, code, newPassword }` sets the password, confirms the email, and signs out every session.
+  - **Rules:** codes expire after 10 minutes and stop working after 5 wrong tries (counted atomically, so parallel guesses can't get more). Only the newest code works. A new one can be sent every 60 seconds; inside that window the request quietly sends nothing, so responses never reveal whether an email has an account. Only an HMAC of the code (keyed by `AUTH_SECRET`, tied to the email and purpose) is stored, in `otp_codes`. Sending is also rate-limited per IP and per email, and checking per IP.
+- **Passwords:** bcrypt, cost 12. They need 8–72 characters with a letter and a number. Sign-in takes the same time whether or not the email exists, and "forgot password" always gives the same answer.
+- **Cross-site requests:** POST, PATCH and DELETE requests with an `Origin` header from another site get a 403.
+- **Security headers** ([next.config.ts](next.config.ts)), on every page and API response:
+  - `Content-Security-Policy`: scripts, styles, fonts and requests only from this site, and images also from the two image hosts the pages use. No plugins (`object-src 'none'`), no framing (`frame-ancestors 'none'`), `<base>` and form posts locked to this site.
+  - It keeps `'unsafe-inline'` for Next's own inline scripts. Nonces would remove that, but they make every page render per request, which doesn't work with Cache Components / Partial Prerendering. Add any new image host or third-party script to the policy, or the browser will block it.
+  - Also `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, a `Permissions-Policy` that turns off camera, microphone, location and payment, and in production `Strict-Transport-Security` (HTTPS for two years). `X-Powered-By` is off.
+  - API responses, errors included, are `Cache-Control: no-store`.
+- **Client IP:** rate limits and the audit log use the address the app's own proxy added to `X-Forwarded-For`, counted from the right by `TRUST_PROXY_HOPS` (default 1, for Vercel or one nginx/load balancer; 0 if nothing sits in front). Entries a client adds itself are ignored, so a fake header can't get around the limits.
+- **Rate limits:** sign-in, sign-up, password emails, password changes, estimates and booking creation are limited, in memory. That's fine for one server instance; move it to Redis before running several.
+- **Access:** customers see only their own bookings and addresses; anyone else's comes back as 404. Providers see the jobs assigned to them, and admins see everything. A pro also sees the customer's name on their jobs, and the customer's phone once the job is confirmed. Only customer accounts can create bookings (pros and staff get 403).
+- **Each role in its own area:** customers use Dashboard, My Bookings and the booking pages; pros use `/pro`; staff use `/admin`. Messages and Profile are shared. A pro or staff member who opens a customer page is sent to their own home (`/pro` or `/admin`) and the page isn't shown while redirecting; `/pro` and `/admin` answer 404 to anyone else from the server. The nav, logo and search follow the role too. A provider's phone number is shown to the customer only once the booking is confirmed.
+- **Availability:** hourly slots run 8:00 AM–7:00 PM, Florida time. Capacity is the number of active providers who offer that service in an area covering the ZIP. A booking takes capacity for every hour its estimated duration overlaps. Admins can block a day or a slot (`availability_blocks` table; there's no endpoint yet). You can book from today to 90 days ahead, with at least 2 hours' notice on the same day.
+- **No double booking:** creating or rescheduling a booking re-checks the slot inside a transaction, holding a Postgres advisory lock per service and date.
+- **Lifecycle:** `pending → confirmed → in_progress → completed`, and `cancelled` from any open state. Every change writes a `booking_events` row.
+  - Customers can cancel pending or confirmed bookings. Only admins can cancel jobs in progress.
+  - Customers can modify details or notes up to 24 hours before the window.
+  - Rescheduling a confirmed booking sends it back to `pending` so the new window gets confirmed.
+- **Refs:** `MN-<year>-NNNN`, numbered by a per-year counter that's updated atomically.
+- **Addresses:** a booking keeps its own copy of the job address, so editing or deleting a saved address never changes past bookings.
+- **Messaging:** one conversation per booking.
+  - **Opened with the booking.** `createBooking` creates the conversation between the customer and **MoveNow Support** in the same transaction as the booking, with an automated welcome message from support (booking ref, date, what happens next). If anything fails, neither the booking nor the conversation is saved. Bookings from before this get their conversation the first time someone taps "Message" (`POST /conversations { bookingId }`).
+  - **Seats.** A conversation has up to three seats: `customer`, `support` (staff with `support.reply`; the team shares the seat) and `moderator` (the booking's assigned pro, `conversations.provider_id`). Each message records its seat in `messages.author`; automated support messages have no sender.
+  - **Moderator.** When dispatch assigns a pro (`/admin/bookings/:id/assign` or `/confirm`), the pro becomes the conversation's moderator in the same transaction, and an automated message tells the customer. A reassignment replaces the old moderator: the previous pro can no longer see the thread or the job (404). The booking row is locked during assignment, so two dispatchers can't leave the booking and its conversation pointing at different pros.
+  - **What each seat can do** (checked on the server in `messaging.ts`; the UI only hides buttons):
+
+    | | Read | Post | Close / reopen | Hide a message |
+    |---|---|---|---|---|
+    | Customer | ✓ | ✓ unless closed | – | – |
+    | Moderator (assigned pro) | ✓ | ✓ | ✓ | customer's and their own, not support's |
+    | Support | ✓ | ✓ | ✓ | any |
+
+    A closed conversation stays readable; the customer gets 403 when posting until it's reopened. A hidden message keeps its row (for disputes) but shows "This message was removed by a moderator." to everyone and no longer counts as unread.
+  - **Unread:** each seat has its own read pointer (`customer_read_at`, `support_read_at`, `moderator_read_at`). Unread for a seat means visible messages from other seats newer than its pointer, so one side reading never clears another side's badge. A new moderator starts with nothing unread. "Seen" on your last message means another seat has read past it.
+  - Messages are 1–2000 characters, limited to 60 per 10 minutes per user. Sending a message marks the thread read for the sender's seat. If the recipient (the moderator for customer messages, the customer otherwise) hasn't used the app in 5 minutes and has message emails on, the first message of a burst sends them an email.
+- **Photos and file storage:** uploads are `multipart/form-data` with one image in `file`, up to 10 MB. Every image is decoded and re-encoded to WebP with `sharp` ([images.ts](app/lib/server/images.ts)): the bytes decide whether it's really an image (a renamed file is refused), metadata such as GPS location is removed, the camera rotation is applied, and huge "decompression bomb" images are refused. Profile pictures become 512×512; booking photos fit in 2048 px, plus a 480 px thumbnail.
+  - **Booking photos** are private: `GET /bookings/:id/photos/:photoId` uses the booking's access rule (owner, assigned provider, admin; 404 for anyone else) and is cached only by the viewer's browser. Up to 10 per booking. The customer can add or remove them while the booking is pending or confirmed; admins until it's cancelled (`permissions.canEditPhotos`). The booking forms upload the chosen photos right after the booking is created; any that fail are reported on the booking page, which has a Photos tab to add or remove them.
+  - **Profile pictures** are public at a random address that changes with each upload (`/avatars/<uuid>.webp`), so they can be cached forever. Replacing or removing one deletes the old file; so does deleting the account.
+  - **Storage** ([storage.ts](app/lib/server/storage.ts)) is a small `put / get / delete` interface. The only driver today writes to the server's disk under `STORAGE_DIR` (default `./storage`, git-ignored); files are only ever served through the API routes above. Hosts with a temporary disk (Vercel, most containers) lose these files on redeploy, so add a bucket driver (S3, Cloudflare R2, Supabase Storage) before deploying there.
+  - Uploads are limited to 60 per hour per user.
+- **Account deletion** (`DELETE /me`) needs the password and is blocked while bookings are open. It anonymizes the account and keeps past bookings for the business record.
+
+### Admin area
+
+A private section at **`/admin`** in the same app, for MoveNow staff. It uses the same backend and booking rules as the customer side, behind its own checks.
+
+**Who gets in.** Staff are users with `role = admin` and a `staffRole`. Each role has a fixed set of permissions ([app/lib/staff.ts](app/lib/staff.ts)):
+
+| Role | Can |
+|---|---|
+| Manager | Everything below, plus staff accounts and the audit log |
+| Dispatcher | Bookings (confirm, assign, start, complete, cancel), providers (add, edit, deactivate), availability closures, read customers |
+| Support | Read bookings, providers and customers; answer the support inbox in Messages |
+
+**How it's protected.**
+- Every `/api/v1/admin/*` route checks its own permission on the server (`requirePermission`). Anyone without it (customers, signed-out visitors, staff with another role) gets the same **404** as a missing page, so the admin API doesn't reveal itself. The same permissions also apply on customer endpoints: support staff can't cancel or edit a booking through them.
+- The pages are checked on the server too: signed out, `/admin` answers 404 from `proxy.ts`; signed in but not staff, the admin layout shows the 404 page. Hiding menu items is only for convenience, never the protection.
+- **Two steps on every staff sign-in:** password, then a 6-digit code by email (`MFA_REQUIRED` → `POST /auth/signin/verify`). Staff sessions end with the browser and last 8 hours at most; "remember me" is ignored.
+- **No self-service access:** staff accounts are created only by a manager (Staff page) or on the server with `npm run staff:create -- email "Name" role`. A staff email can't also be a customer account. New staff set their password with "Forgot password" (an email code).
+- Changing someone's role or removing their access signs them out immediately. You can't change your own access, and the last active manager can't be removed or demoted.
+- **Audit log:** every staff action (sign-in, confirm, assign, start, complete, cancel with reason, provider and staff changes, closures) writes a row with who, what, when and IP (`audit_logs`). Rows are never edited; the log is on the Audit log page and on each booking.
+
+**Pages.** Overview (what needs attention, today's jobs) · Bookings (search by ref, customer, email, street, ZIP or pro; filters kept in the URL) · Booking detail (confirm with a pro, arrival window and final price, with eligible pros and their other jobs that day; reassign, start, complete, cancel) · Providers · Customers (read-only) · Support inbox (the existing Messages page) · Availability (close a day or a slot) · Staff · Audit log.
+
+**First manager.** The seed's `admin@movenow.test` is a manager. Emails to reserved test domains (`.test`, `.example`, `.invalid`, `.localhost`) are printed to the server console instead of being sent, so its sign-in code shows up there. For a real person: `npm run staff:create -- you@company.com "Your Name" manager`.
+
+### Provider area
+
+Pros sign in at `/signin` with their own account (`role = provider`, linked to a `providers` row through `providers.user_id`). Sign-in is password only, like customers. It is refused (403) unless the linked provider profile is active. Sessions use the same `mn_session` cookie as everyone else.
+
+- **`/pro`:** the jobs assigned to them, upcoming or all, with counts and search. It reads `GET /bookings`, which the server already limits to the signed-in pro's jobs.
+- **`/pro/jobs/:id`:** job details: schedule, addresses and access notes, service details, customer name (and phone once confirmed), the customer's photos, and a button to open the conversation.
+- **`/messages`:** their jobs' conversations, as moderator.
+
+The `/pro` layout checks on the server that the session is an active pro (anyone else sees the 404 page), and the API scopes every booking and conversation again. Pros who open customer pages (`/dashboard`, `/my-bookings`, `/book-service`) are sent to `/pro`, and the nav shows My Jobs, Messages and Profile. To give a pro a login, create a user with `role = provider`, set it as that provider's `user_id`, and have the pro choose a password with "Forgot password". The seed does this for Mike Rodriguez. There's no admin screen for it yet.
+
+### Frontend
+
+| Piece | What it does |
+|---|---|
+| [app/lib/api/client.ts](app/lib/api/client.ts) | `api()` fetch helper with typed errors, `useApi()` loading hook, `qs()` query builder |
+| [app/lib/api/types.ts](app/lib/api/types.ts) | Response types, taken from the server serializers so they can't drift |
+| [app/lib/api/format.ts](app/lib/api/format.ts) | Dates, time windows, money, and the booking shape the cards render |
+| [app/components/SessionProvider.tsx](app/components/SessionProvider.tsx) | Current user, sign in / sign up / sign out (`useSession()`) |
+| [proxy.ts](proxy.ts) + [RequireAuth](app/components/RequireAuth.tsx) | Signed-out visits to `/dashboard`, `/my-bookings`, `/profile`, `/book-service/*` and `/pro` go to `/signin?next=…`. The proxy only checks that a cookie exists; RequireAuth catches expired sessions and keeps pros in their own area. |
+| `/pro`, `/pro/jobs/:id` ([app/pro](app/pro)) | The provider area (see [Provider area](#provider-area)) |
+| [NewBookingFab](app/components/NewBookingFab.tsx) | Floating "New booking" button (to `/book-service`) on every customer page except the booking pages. Icon only on phones; on Messages it's a smaller round button above the message box so it never covers Send. |
+| `/signin` | Sign in, create account → enter code, forgot password → enter code + new password (`?mode=signup\|forgot\|reset&email=`). `/reset-password` and `/verify-email` only redirect there or to Profile, for old links |
+| [app/components/OtpInput.tsx](app/components/OtpInput.tsx) | Code field (numeric, paste and phone autofill friendly) and "resend" with a countdown |
+| `/messages`, `/messages/:id` ([app/messages](app/messages)) | Conversation list and thread in one page. Two panes on large screens, one at a time on phones |
+| [app/lib/api/messaging.ts](app/lib/api/messaging.ts) | Polling, unread badge, conversation list and the shared "Message" button hook |
+
+How the main pages use the API:
+- **Landing:** prices from `GET /services`, areas from `GET /service-areas`, and the hero form checks the ZIP before going on.
+- **Booking forms:** saved addresses fill the address picker, time slots come from `GET /availability`, a live price from `POST /quotes/estimate`, and "Request booking" calls `POST /bookings` and opens the new booking.
+- **Dashboard and My Bookings:** search, status tabs, date range and pagination all run on the server.
+- **Booking details:** timeline from `booking.timeline`, buttons from `booking.permissions`, inline reschedule with real slots, cancel with confirmation, and special instructions saved with `PATCH`.
+- **Messages:** the nav badge, Recent Messages (dashboard and My Bookings) and every "Message" button use the messaging API. Threads name each sender and mark the moderator. The moderator and support get "Close chat / Reopen chat" and a remove button on messages they're allowed to hide; the customer sees a notice instead of the composer while the chat is closed. Updates come by polling: every 5 seconds in an open thread, every 20 seconds for the list and badge, paused while the tab is hidden. Sending shows the message straight away, with Retry if it fails.
+- **Profile:** personal info and preferences save through `PATCH /me` and `/me/preferences`, saved addresses are fully editable, and password change and reset are real.
+
+### Tests
+
+Vitest, in three layers (`vitest.config.ts`). Every run uses its own database: `DATABASE_URL` with `_test` added to the name (or `TEST_DATABASE_URL`). It is dropped, migrated with the real migrations and seeded before each run, so your dev data is never touched. The database user needs permission to create databases; the setup refuses any name that doesn't end in `_test`.
+
+| Command | What runs | Time |
+|---|---|---|
+| `npm run test:unit` | [tests/unit](tests/unit): pricing, lifecycle rules, staff permissions, Florida time and DST, formatting, validation, rate limits, client IP, the welcome message. No database. | seconds |
+| `npm run test:integration` | [tests/integration](tests/integration): the server modules against the test database: booking create/list/modify/reschedule/cancel, shared time slots (including two customers racing for one slot), access rules, dispatch, availability and closures, providers and staff rules, messaging seats, moderator assign/reassign, moderation rights, per-seat unread, email codes. | ~1 min |
+| `npm test` | Both of the above | ~1 min |
+| `npm run test:e2e` | [tests/e2e](tests/e2e): runs `next build`, starts `next start` on port 3100 (`E2E_PORT`) on the test database, and drives the real API and pages over HTTP: sign-up/sign-in with codes, cookies, rate limits, CSRF, password change/reset, staff 2-step sign-in, pro sign-in, the full booking → assign → moderated conversation → reassign flow, admin 404s, profile, addresses, photo and avatar uploads, page redirects, security headers, and that a faked `X-Forwarded-For` can't dodge rate limits. Stops the server afterwards. | a few minutes |
+
+- `E2E_SKIP_BUILD=1 npm run test:e2e` reuses the last build. `E2E_BASE_URL=…` tests an already-running server instead (it must use the test database).
+- Emails go to `.test` addresses, which are never sent. Tests that need a code read it from a mocked mailer (integration) or plant a known one with the same HMAC as the server (e2e). Both sides read `AUTH_SECRET` from `.env`.
+- Shared helpers are in [tests/support](tests/support): the seeded people as viewers, a free-slot finder (slots are global per date, so each test takes its own), booking builders, and an HTTP client with its own cookie and client IP per person.
+
+### Decisions on the open questions (§13)
+
+These were needed to build anything. Each is easy to change.
+
+| Question | What the code does now |
+|---|---|
+| Pricing | Placeholder rules in [pricing.ts](app/lib/server/pricing.ts): moving charges the starting price per hour (2-person crew), with the time based on home size and volume, plus special items, stairs without an elevator, and extras. Assembly and TV mounting charge per item plus add-ons. Admins set `finalPriceCents` when confirming. |
+| Guest booking | `POST /bookings` needs an account. `POST /quotes/estimate` is public, so the price shows before sign-in. |
+| Provider assignment | Manual, by an admin, through `/admin/bookings/:id/confirm` or `/assign`. The provider must offer the service and cover the ZIP. |
+| Cancellation policy | No fees yet (marked TODO for when payments arrive). |
+| Modify window | 24 hours; admins can override. |
+| Long-distance moves | The job (origin) ZIP must be in a service area; the destination can be any US ZIP. |
+| Messaging scope | One thread per booking with the customer and MoveNow Support from the start; the assigned pro joins as moderator. Text only: the `attachments` column exists but isn't used yet. |
+| Real-time | Polling. Swap in Pusher/Ably/Supabase later by firing the same refresh that `usePolling` does. |
+
+### Not built yet
+
+- **Notifications, payments, posting reviews:** the reviews table exists, but these features have no endpoints yet (phases 4–6). Message attachments and push notifications aren't built either.
+- **Email sending:** over SMTP with nodemailer ([email.ts](app/lib/server/email.ts)). Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `EMAIL_FROM` (Gmail: `smtp.gmail.com`, port 465, an App Password; see `.env.example`). Without `SMTP_HOST`, development prints emails to the server console instead. If a code email fails to send, the API answers 503 `EMAIL_NOT_SENT` and "resend" works right away. Gmail allows about 500 emails a day; use a transactional provider (Resend, Postmark, SendGrid) for production.
+- **Placeholders left in the UI:** the notification bell uses sample data. Saved cards, ratings and email receipts say "coming soon".
+- **Automated tests:** there are no browser (click-through) UI tests yet; the [Tests](#tests) cover the logic, the database layer and the HTTP API.
+
+---
+
 ## 1. Quick start (frontend)
 
 ```bash
@@ -37,7 +278,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3000. The pages run without a database; the API needs the [backend setup](#setup).
 
 | Route | What it is |
 |---|---|
@@ -108,7 +349,7 @@ These are suggestions. Any stack works as long as it implements the API in [sect
 
 | Role | Description | Needs |
 |---|---|---|
-| **Customer** | Books services. This is the only role with UI today. | Own bookings, messages, profile, payment methods |
+| **Customer** | Books services. | Own bookings, messages, profile, payment methods |
 | **Provider (pro)** | Mover / technician who does the job. Shown on cards with name, avatar, rating, reviews, phone. | Accept assigned jobs, message customers, mark jobs complete. Needs its own UI later. |
 | **Admin / dispatcher** | MoveNowFL staff. The timeline step "Agent confirmed — crew and arrival window locked in" implies a human confirms. | See all requests, set final price, assign provider, confirm/cancel, manage service areas and catalog |
 
@@ -286,13 +527,14 @@ type FurnitureType = 'bed_frame' | 'dresser' | 'wardrobe' | 'dining_table' | 'de
 |---|---|---|---|
 | id | uuid | id | uuid |
 | booking_id | uuid? | conversation_id | uuid |
-| customer_id | uuid | sender_id | uuid |
-| provider_id | uuid | body | text |
-| last_message_at | timestamp | attachments | jsonb? |
-| | | created_at | timestamp |
-| | | read_at | timestamp? |
+| customer_id | uuid | sender_id | uuid? (null = automated support message) |
+| provider_id | uuid? (the moderator) | author | `customer` \| `support` \| `moderator` |
+| moderator_assigned_at | timestamp? | body | text |
+| customer_read_at, support_read_at, moderator_read_at | timestamp? | attachments | jsonb? |
+| closed_at, closed_by_id | timestamp?, uuid? | created_at | timestamp |
+| last_message_at | timestamp | hidden_at, hidden_by_id | timestamp?, uuid? |
 
-Unread count per conversation = messages where `sender_id != me` and `read_at is null`.
+Unread count for a seat = messages that aren't hidden, where `author != my seat` and `created_at > my seat's *_read_at`.
 
 **notifications** (topbar bell)
 
@@ -448,9 +690,9 @@ REST shape shown below; the same operations can be Server Actions. All endpoints
 | POST | `/auth/signout` | — | |
 | GET | `/auth/session` | — | Returns current user + preferences, or 401 |
 | POST | `/auth/password/forgot` | `{ email }` | Always 200 (don't reveal if email exists) |
-| POST | `/auth/password/reset` | `{ token, newPassword }` | |
+| POST | `/auth/password/reset` | `{ email, code, newPassword }` | 6-digit code from the email |
 | POST | `/auth/password/change` | `{ currentPassword, newPassword }` | Profile → Security |
-| POST | `/auth/verify-email` | `{ token }` | |
+| POST | `/auth/verify-email` | `{ code }` | Signed in; new sign-ups use `/auth/signup/verify` |
 
 ### 7.3 Profile & preferences
 
@@ -844,7 +1086,7 @@ Found while mapping the UI. They will cause bugs once real data flows through.
 5. **Hard-coded default date** `2026-10-30` in all booking forms; should default to the next available date from the API.
 6. **Booking details page** looks up the booking by `id` for the header only. The sidebar, tabs, timeline, and "Booked on" date are hard-coded to a TV mounting booking, and the ref is rewritten from `MN-2025-` to `BK-`. Use one ref format everywhere.
 7. **State dropdown** only offers FL, GA, NY, TX, CA. Since service is South Florida only, consider locking to FL or validating against service areas.
-8. **Messages nav link** points to `/`; a messages page is needed.
+8. ~~**Messages nav link** points to `/`~~ — fixed: it opens `/messages`.
 9. **Quick links in RailTabs** — "Book a Service" links to `/my-bookings` and "Back to Dashboard" links to `/`.
 10. **Password field prefilled** with a sample value in Security settings.
 
@@ -861,7 +1103,7 @@ These decide parts of the backend and need an answer from the product owner:
 5. **Cancellation policy:** free until when? Fee after that? Same for reschedule?
 6. **Modify window:** the UI says 24 hours. Confirm, and which fields can change.
 7. **Long-distance moves:** the service card says "local and long distance". Are out-of-state destinations allowed? Different pricing?
-8. **Provider and admin apps:** in scope for this phase, or will admins use a simple internal page or a third-party tool?
+8. **Provider and admin apps:** the admin area is built (`/admin`, see [Admin area](#admin-area)). A provider app is still open.
 9. **Messaging scope:** customer ↔ provider only, or customer ↔ support as well? Attachments?
 10. **Reviews:** public on a provider profile page? Moderation?
 

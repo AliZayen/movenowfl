@@ -1,182 +1,139 @@
 'use client';
 
-import type { BookingPrefill } from '@/app/book-service/prefill';
 import React, { useCallback, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import AppImage from '@/app/components/ui/AppImage';
-import Icon from '@/app/components/ui/AppIcon';
-import Toast from '@/app/components/ui/Toast';
-import MoveDetailsSection, { AddressForm } from '@/app/book-service/moving/components/MoveDetailsSection';
+import type { BookingPrefill } from '@/app/book-service/prefill';
+import MoveDetailsSection from '@/app/book-service/moving/components/MoveDetailsSection';
 import ItemsSizeSection from '@/app/book-service/moving/components/ItemsSizeSection';
 import DateTimeSection from '@/app/book-service/components/DateTimeSection';
 import PhotosSection from '@/app/book-service/components/PhotosSection';
 import SummarySidebar from '@/app/book-service/moving/components/SummarySidebar';
-
-export const homeTypes = [
-{ id: 'studio', label: 'Studio', range: '0 - 400 sqft' },
-{ id: '1br', label: '1 Bedroom', range: '401 - 800 sqft' },
-{ id: '2br', label: '2 Bedrooms', range: '801 - 1200 sqft' },
-{ id: '3br', label: '3 Bedrooms', range: '1201 - 1800 sqft' },
-{ id: '4br', label: '4+ Bedrooms', range: '1800+ sqft' }];
-
-
-export const volumes = [
-{ id: 'few', label: 'A few items' },
-{ id: 'half', label: 'Half a truck' },
-{ id: 'full', label: 'Full truck' },
-{ id: 'unsure', label: 'Not sure' }];
-
+import BookingFormShell, { location, missingField } from '@/app/book-service/components/BookingFormShell';
+import { emptyAddress, type AddressForm } from '@/app/book-service/components/AddressBlock';
+import { useSubmitBooking } from '@/app/book-service/components/useSubmitBooking';
+import { FLOORS, HOME_SIZES, idOf, MOVE_VOLUMES, PARKING, SPECIAL_ITEMS } from '@/app/lib/catalog';
+import { formatDate } from '@/app/lib/api/format';
 
 interface BookMovingServiceClientProps {
   prefill?: BookingPrefill;
 }
 
+const zipOk = (zip: string) => /^\d{5}$/.test(zip);
+
 export default function BookMovingServiceClient({ prefill = {} }: BookMovingServiceClientProps) {
-  const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
+  const { submit, busy, progress, photos, setPhotos } = useSubmitBooking(setToast);
 
-  const [from, setFrom] = useState<AddressForm>({
-    saved: 'Home',
-    street: '123 Ocean Dr',
-    city: 'Miami',
-    state: 'FL',
-    zip: prefill.fromZip ?? '33101'
-  });
-  const [to, setTo] = useState<AddressForm>({
-    saved: 'Home',
-    street: '456 Brickell Ave',
-    city: 'Miami',
-    state: 'FL',
-    zip: prefill.toZip ?? '33131'
-  });
+  const [from, setFrom] = useState<AddressForm>(emptyAddress(prefill.fromZip));
+  const [to, setTo] = useState<AddressForm>(emptyAddress(prefill.toZip));
   const [floor, setFloor] = useState('Ground');
   const [elevator, setElevator] = useState('Yes');
   const [parking, setParking] = useState('Street parking');
   const [access, setAccess] = useState('');
 
-  const [homeType, setHomeType] = useState('1br');
+  const [homeType, setHomeType] = useState<string>('1br');
   const [volume, setVolume] = useState('full');
   const [specials, setSpecials] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
 
-  const [dateValue, setDateValue] = useState(prefill.date ?? '2026-10-30');
-  const [slot, setSlot] = useState('10:00 AM');
+  const [dateValue, setDateValue] = useState(prefill.date ?? '');
+  const [slot, setSlot] = useState('');
 
-  const summary = useMemo(() => {
-    const ht = homeTypes.find((h) => h.id === homeType);
-    const vol = volumes.find((v) => v.id === volume);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const [yy, mm, dd] = dateValue.split('-').map(Number);
-    const dateLabel = yy && mm && dd ? `${months[mm - 1]} ${dd}, ${yy}` : '—';
-    return {
-      date: dateLabel,
-      fromZip: from.zip || '—',
-      toZip: to.zip || '—',
-      homeSize: ht?.label.replace('Bedrooms', 'Bedrooms') ?? '—',
-      moveSize: vol?.label ?? '—'
-    };
-  }, [homeType, volume, dateValue, from.zip, to.zip]);
+  // The body for POST /bookings (and POST /quotes/estimate).
+  const body = useMemo(
+    () => ({
+      serviceType: 'moving' as const,
+      scheduledDate: dateValue,
+      preferredSlot: slot,
+      origin: location(from, {
+        floor: idOf(FLOORS, floor),
+        elevator: elevator === 'Yes',
+        parking: idOf(PARKING, parking),
+        accessNotes: access.trim() || undefined,
+      }),
+      destination: location(to),
+      details: {
+        homeSize: homeType,
+        volume,
+        specialItems: specials.map((s) => idOf(SPECIAL_ITEMS, s)).filter(Boolean),
+      },
+      extraServices: [],
+      notes: notes.trim() || undefined,
+    }),
+    [from, to, floor, elevator, parking, access, homeType, volume, specials, notes, dateValue, slot],
+  );
 
-  const handleNext = () => {
-    if (!from.street.trim() || !to.street.trim()) {
-      setToast('Please enter both street addresses to continue');
-      return;
-    }
-    setToast('Move details saved — a pro will confirm your quote shortly');
+  // Price only depends on the details, ZIPs and access, so estimate as soon as both ZIPs are in.
+  const estimatePayload =
+    zipOk(from.zip) && zipOk(to.zip)
+      ? {
+          serviceType: body.serviceType,
+          origin: { zip: from.zip, floor: body.origin.floor, elevator: body.origin.elevator },
+          destination: { zip: to.zip },
+          details: body.details,
+          extraServices: body.extraServices,
+        }
+      : null;
+
+  const handleSubmit = () => {
+    const missing = missingField([
+      [!!from.street.trim() && !!from.city.trim() && zipOk(from.zip), 'Enter the full address you are moving from'],
+      [!!to.street.trim() && !!to.city.trim() && zipOk(to.zip), 'Enter the full address you are moving to'],
+      [!!dateValue, 'Pick a move date'],
+      [!!slot, 'Pick a time slot'],
+    ]);
+    if (missing) return setToast(missing);
+    submit(body);
+  };
+
+  const summary = {
+    date: formatDate(dateValue),
+    fromZip: from.zip || '—',
+    toZip: to.zip || '—',
+    homeSize: HOME_SIZES.find((h) => h.id === homeType)?.label ?? '—',
+    moveSize: MOVE_VOLUMES.find((v) => v.id === volume)?.label ?? '—',
   };
 
   return (
-    <div className="space-y-6">
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-primary">
-        <button
-          type="button"
-          onClick={() => router?.push('/')}
-          aria-label="Back to dashboard"
-          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-secondary">
-          
-          <Icon name="ArrowLeftIcon" size={16} />
-        </button>
-        <Link href="/" className="hover:text-accent">Dashboard</Link>
-        <Icon name="ChevronRightIcon" size={12} className="text-muted-foreground" />
-        <Link href="/book-service" className="hover:text-accent">Book a Service</Link>
-        <Icon name="ChevronRightIcon" size={12} className="text-muted-foreground" />
-        <span className="font-semibold">Moving</span>
-      </nav>
-
-      <div className="relative overflow-hidden rounded-2xl">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-xl">
-            <h1 className="text-3xl font-extrabold tracking-tight text-primary sm:text-4xl">Book Your Moving Service</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Tell us about your move and we&apos;ll match you with the best professionals in Miami.
-            </p>
-          </div>
-          <div className="relative h-40 w-full overflow-hidden rounded-xl lg:h-36">
-            <AppImage
-              src="https://img.rocket.new/generatedImages/rocket_gen_img_1ecfd21dc-1770563465669.png"
-              alt="White MoveNow moving truck parked outside a Miami apartment building with movers carrying boxes"
-              fill
-              sizes="(max-width: 1024px) 100vw, 420px"
-              className="object-cover" />
-            
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="space-y-6 xl:col-span-8">
-          <MoveDetailsSection
-            from={from}
-            to={to}
-            onFromChange={setFrom}
-            onToChange={setTo}
-            floor={floor}
-            onFloor={setFloor}
-            elevator={elevator}
-            onElevator={setElevator}
-            parking={parking}
-            onParking={setParking}
-            access={access}
-            onAccess={setAccess} />
-          
-          <ItemsSizeSection
-            homeType={homeType}
-            onHomeType={setHomeType}
-            volume={volume}
-            onVolume={setVolume}
-            specials={specials}
-            onSpecials={setSpecials}
-            notes={notes}
-            onNotes={setNotes} />
-          
-          <DateTimeSection date={dateValue} onDate={setDateValue} slot={slot} onSlot={setSlot} />
-          <PhotosSection onNotify={setToast} />
-
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
-            <button
-              type="button"
-              onClick={() => router?.push('/')}
-              className="rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:border-accent hover:text-accent active:scale-95">
-              
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              className="inline-flex min-w-48 items-center justify-center gap-2 rounded-lg bg-accent px-8 py-3 text-sm font-bold text-accent-foreground transition-all hover:opacity-90 active:scale-95">
-              
-              Next <Icon name="ArrowRightIcon" size={16} />
-            </button>
-          </div>
-        </div>
-
-        <aside className="xl:col-span-4">
-          <SummarySidebar summary={summary} onNotify={setToast} />
-        </aside>
-      </div>
-      <Toast message={toast} onClose={closeToast} />
-    </div>);
-
+    <BookingFormShell
+      service="Moving"
+      title="Book Your Moving Service"
+      subtitle="Tell us about your move and we'll match you with the best professionals in Miami."
+      estimatePayload={estimatePayload}
+      estimateMissing="Enter both ZIP codes to see a price."
+      onSubmit={handleSubmit}
+      busy={busy}
+      busyLabel={progress}
+      toast={toast}
+      onCloseToast={closeToast}
+      sidebar={<SummarySidebar summary={summary} onNotify={setToast} />}
+    >
+      <MoveDetailsSection
+        from={from}
+        to={to}
+        onFromChange={setFrom}
+        onToChange={setTo}
+        floor={floor}
+        onFloor={setFloor}
+        elevator={elevator}
+        onElevator={setElevator}
+        parking={parking}
+        onParking={setParking}
+        access={access}
+        onAccess={setAccess}
+      />
+      <ItemsSizeSection
+        homeType={homeType}
+        onHomeType={setHomeType}
+        volume={volume}
+        onVolume={setVolume}
+        specials={specials}
+        onSpecials={setSpecials}
+        notes={notes}
+        onNotes={setNotes}
+      />
+      <DateTimeSection service="moving" zip={from.zip} date={dateValue} onDate={setDateValue} slot={slot} onSlot={setSlot} />
+      <PhotosSection photos={photos} onChange={setPhotos} onNotify={setToast} />
+    </BookingFormShell>
+  );
 }

@@ -6,16 +6,22 @@ import AppImage from '@/app/components/ui/AppImage';
 import Avatar from '@/app/components/ui/Avatar';
 import Icon from '@/app/components/ui/AppIcon';
 import StatusBadge from '@/app/components/ui/StatusBadge';
-import type { Booking } from '@/app/data/mockData';
+import type { UiBooking } from '@/app/lib/api/format';
+import { useMessageBooking } from '@/app/lib/api/messaging';
 
 interface NextBookingCardProps {
-  booking: Booking | undefined;
+  booking: UiBooking | undefined;
+  loading?: boolean;
   onBook: () => void;
   onNotify: (msg: string) => void;
 }
 
 // The most useful thing for a returning customer: when the next job is and who is coming.
-export default function NextBookingCard({ booking, onBook, onNotify }: NextBookingCardProps) {
+export default function NextBookingCard({ booking, loading, onBook, onNotify }: NextBookingCardProps) {
+  const message = useMessageBooking(onNotify);
+  if (loading) {
+    return <section id="upcoming" aria-busy="true" className="h-64 animate-pulse rounded-2xl border border-border bg-card shadow-soft" />;
+  }
   if (!booking) {
     return (
       <section
@@ -68,16 +74,22 @@ export default function NextBookingCard({ booking, onBook, onNotify }: NextBooki
             <span className="truncate">{b.address}</span>
           </p>
 
-          <div className="mt-4 flex items-center gap-3 rounded-xl bg-muted/60 p-3">
-            <Avatar src={b.provider.avatar} alt={b.provider.avatarAlt} size={40} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-foreground">{b.provider.name}</p>
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Icon name="StarIcon" size={12} variant="solid" className="text-warning" />
-                {b.provider.rating.toFixed(1)} ({b.provider.reviews} reviews) · {b.duration}
-              </p>
+          {b.provider ? (
+            <div className="mt-4 flex items-center gap-3 rounded-xl bg-muted/60 p-3">
+              {b.provider.avatar && <Avatar src={b.provider.avatar} alt={b.provider.avatarAlt} size={40} />}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-foreground">{b.provider.name}</p>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Icon name="StarIcon" size={12} variant="solid" className="text-warning" />
+                  {b.provider.rating.toFixed(1)} ({b.provider.reviews} reviews) · {b.duration}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="mt-4 rounded-xl bg-muted/60 p-3 text-sm text-muted-foreground">
+              We&apos;re matching you with a pro. You&apos;ll see who&apos;s coming once it&apos;s confirmed.
+            </p>
+          )}
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
@@ -88,10 +100,11 @@ export default function NextBookingCard({ booking, onBook, onNotify }: NextBooki
             </Link>
             <button
               type="button"
-              onClick={() => onNotify(`Message opened with ${b.provider.name}`)}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border px-4 text-sm font-bold text-foreground transition-colors hover:bg-muted"
+              onClick={() => message.start(b.id)}
+              disabled={message.busyId === b.id}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border px-4 text-sm font-bold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
             >
-              <Icon name="ChatBubbleOvalLeftEllipsisIcon" size={18} /> Message
+              <Icon name="ChatBubbleOvalLeftEllipsisIcon" size={18} /> {message.busyId === b.id ? 'Opening…' : 'Message'}
             </button>
             <Link
               href={`/my-bookings/${b.id}`}

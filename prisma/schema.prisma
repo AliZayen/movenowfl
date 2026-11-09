@@ -1,0 +1,455 @@
+// MoveNowFL database schema. See README sections 5 and 6 for the reasoning behind each table.
+// Form option values (floor, parking, TV size, ...) are plain strings validated with Zod in
+// app/lib/validation, so the catalog can change without a migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  customer
+  provider
+  admin
+}
+
+enum ServiceType {
+  moving
+  furniture_assembly
+  tv_mounting
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+}
+
+enum BookingEventType {
+  submitted
+  provider_assigned
+  confirmed
+  rescheduled
+  modified
+  started
+  completed
+  cancelled
+}
+
+enum DateFlexibility {
+  exact
+  day
+  week
+}
+
+enum OtpPurpose {
+  signup // confirms the email of a new (or not yet verified) account
+  password_reset
+  admin_login // second step of every staff sign-in
+}
+
+// Who wrote a message, as a seat in the conversation (see Conversation below).
+enum MessageAuthor {
+  customer
+  support // a staff member, or an automated message from MoveNow (senderId null)
+  moderator // the booking's assigned provider
+}
+
+// What a staff (role = admin) account may do. See app/lib/staff.ts for the permission list.
+enum StaffRole {
+  manager // everything, including staff accounts and the audit log
+  dispatcher // bookings and providers, availability
+  support // read bookings and customers, answer the support inbox
+}
+
+// ─── Users and auth ─────────────────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique // stored lower-case
+  passwordHash    String?    @map("password_hash")
+  role            Role       @default(customer)
+  fullName        String     @map("full_name")
+  phone           String? // E.164, e.g. +13055550123
+  avatarUrl       String?    @map("avatar_url")
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  staffRole       StaffRole? @map("staff_role") // set only for role = admin
+  disabledAt      DateTime?  @map("disabled_at") // can't sign in; sessions are removed when set
+  deletedAt       DateTime?  @map("deleted_at") // account deletion anonymizes and sets this
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  preferences    UserPreferences?
+  sessions       Session[]
+  otpCodes       OtpCode[]
+  addresses      Address[]
+  bookings       Booking[]        @relation("CustomerBookings")
+  provider       Provider?
+  events         BookingEvent[]
+  reviews        Review[]
+  conversations  Conversation[]
+  messagesSent   Message[]
+  messagesHidden Message[]        @relation("MessagesHidden")
+  convosClosed   Conversation[]   @relation("ConversationsClosed")
+  photosUploaded BookingPhoto[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model UserPreferences {
+  userId         String  @id @map("user_id") @db.Uuid
+  language       String  @default("en") // en | es | pt
+  timezone       String  @default("America/New_York") // IANA
+  dateFormat     String  @default("MM/DD/YYYY") @map("date_format")
+  theme          String  @default("light") // light | system | navy
+  notifyBooking  Boolean @default(true) @map("notify_booking")
+  notifyMessages Boolean @default(true) @map("notify_messages")
+  notifyPromos   Boolean @default(false) @map("notify_promos")
+  notifyNews     Boolean @default(false) @map("notify_news")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// Server-side sessions. The cookie holds a random token; only its SHA-256 hash is stored.
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  userId     String   @map("user_id") @db.Uuid
+  persistent Boolean  @default(false) // "remember me"
+  expiresAt  DateTime @map("expires_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// 6-digit email codes (sign-up and password reset). Only an HMAC of the code is stored, and only
+// the newest unused code per email + purpose is valid. A pending sign-up keeps the chosen password
+// hash and profile fields in `payload` until the code is entered, so no account exists before that.
+model OtpCode {
+  id        String     @id @default(uuid()) @db.Uuid
+  email     String // lower-case
+  purpose   OtpPurpose
+  codeHash  String     @map("code_hash")
+  userId    String?    @map("user_id") @db.Uuid
+  payload   Json?
+  attempts  Int        @default(0)
+  expiresAt DateTime   @map("expires_at")
+  usedAt    DateTime?  @map("used_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose, createdAt])
+  @@map("otp_codes")
+}
+
+// ─── Addresses ──────────────────────────────────────────────────────────────
+
+// Saved addresses (userId set) and booking job addresses (userId null, copied at booking time
+// so editing a saved address never changes a past booking).
+model Address {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  label     String?
+  street    String
+  apt       String?
+  city      String
+  state     String   @db.Char(2)
+  zip       String   @db.VarChar(5)
+  lat       Decimal? @db.Decimal(9, 6)
+  lng       Decimal? @db.Decimal(9, 6)
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user                User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originBookings      Booking[] @relation("OriginAddress")
+  destinationBookings Booking[] @relation("DestinationAddress")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// ─── Catalog ────────────────────────────────────────────────────────────────
+
+model Service {
+  id                 ServiceType @id
+  name               String
+  description        String
+  startingPriceCents Int         @map("starting_price_cents")
+  imageUrl           String      @map("image_url")
+  imageAlt           String      @map("image_alt")
+  options            Json        @default("{}") // dropdown values for the booking form
+  sortOrder          Int         @default(0) @map("sort_order")
+  active             Boolean     @default(true)
+
+  @@map("services")
+}
+
+model ServiceArea {
+  id     String   @id @default(uuid()) @db.Uuid
+  name   String   @unique
+  zips   String[]
+  active Boolean  @default(true)
+
+  providers Provider[]
+  blocks    AvailabilityBlock[]
+
+  @@map("service_areas")
+}
+
+// Admin-created closures: a whole day, or one slot, optionally for one service or area.
+model AvailabilityBlock {
+  id          String       @id @default(uuid()) @db.Uuid
+  date        DateTime     @db.Date
+  slot        String? // "HH:MM"; null = whole day
+  serviceType ServiceType? @map("service_type")
+  areaId      String?      @map("area_id") @db.Uuid
+  reason      String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  area ServiceArea? @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@map("availability_blocks")
+}
+
+// ─── Providers and reviews ──────────────────────────────────────────────────
+
+model Provider {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String?       @unique @map("user_id") @db.Uuid
+  displayName       String        @map("display_name")
+  avatarUrl         String?       @map("avatar_url")
+  avatarAlt         String?       @map("avatar_alt")
+  phone             String?
+  services          ServiceType[]
+  ratingAvg         Decimal       @default(0) @map("rating_avg") @db.Decimal(2, 1)
+  reviewCount       Int           @default(0) @map("review_count")
+  backgroundChecked Boolean       @default(false) @map("background_checked")
+  insured           Boolean       @default(false)
+  active            Boolean       @default(true)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  serviceAreas  ServiceArea[]
+  bookings      Booking[]
+  reviews       Review[]
+  conversations Conversation[]
+
+  @@map("providers")
+}
+
+model Review {
+  id         String   @id @default(uuid()) @db.Uuid
+  bookingId  String   @unique @map("booking_id") @db.Uuid
+  providerId String   @map("provider_id") @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  rating     Int // 1-5
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  customer User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, createdAt])
+  @@map("reviews")
+}
+
+// ─── Bookings ───────────────────────────────────────────────────────────────
+
+model Booking {
+  id                   String           @id @default(uuid()) @db.Uuid
+  ref                  String           @unique // MN-YYYY-NNNN
+  customerId           String           @map("customer_id") @db.Uuid
+  providerId           String?          @map("provider_id") @db.Uuid
+  serviceType          ServiceType      @map("service_type")
+  status               BookingStatus    @default(pending)
+  scheduledDate        DateTime         @map("scheduled_date") @db.Date // local Florida date
+  preferredSlot        String           @map("preferred_slot") // "HH:MM" picked by the customer
+  windowStart          String?          @map("window_start") // "HH:MM", set when confirmed
+  windowEnd            String?          @map("window_end")
+  dateFlexibility      DateFlexibility? @map("date_flexibility")
+  estimatedDurationMin Int              @map("estimated_duration_min")
+
+  originAddressId        String   @map("origin_address_id") @db.Uuid
+  originFloor            String?  @map("origin_floor")
+  originElevator         Boolean? @map("origin_elevator")
+  originParking          String?  @map("origin_parking")
+  originAccessNotes      String?  @map("origin_access_notes")
+  destinationAddressId   String?  @map("destination_address_id") @db.Uuid
+  destinationFloor       String?  @map("destination_floor")
+  destinationElevator    Boolean? @map("destination_elevator")
+  destinationParking     String?  @map("destination_parking")
+  destinationAccessNotes String?  @map("destination_access_notes")
+
+  details          Json     @default("{}") // service-specific, validated per service type
+  extraServices    String[] @default([]) @map("extra_services")
+  notes            String?
+  quotedPriceCents Int?     @map("quoted_price_cents")
+  finalPriceCents  Int?     @map("final_price_cents")
+  coverImageUrl    String?  @map("cover_image_url")
+
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  customer           User           @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
+  provider           Provider?      @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  originAddress      Address        @relation("OriginAddress", fields: [originAddressId], references: [id])
+  destinationAddress Address?       @relation("DestinationAddress", fields: [destinationAddressId], references: [id])
+  photos             BookingPhoto[]
+  events             BookingEvent[]
+  review             Review?
+  conversation       Conversation?
+
+  @@index([customerId, scheduledDate])
+  @@index([customerId, status])
+  @@index([providerId, scheduledDate])
+  @@index([status, scheduledDate])
+  @@index([serviceType, scheduledDate])
+  @@map("bookings")
+}
+
+// Files live in storage (app/lib/server/storage.ts) under `storageKey`; the row holds what the UI
+// needs. Images are re-encoded to WebP on upload, so `mimeType` is always image/webp.
+model BookingPhoto {
+  id           String   @id @default(uuid()) @db.Uuid
+  bookingId    String   @map("booking_id") @db.Uuid
+  storageKey   String   @unique @map("storage_key")
+  fileName     String   @map("file_name") // the name the customer's file had, cleaned up
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  width        Int
+  height       Int
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  uploadedBy User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@map("booking_photos")
+}
+
+// Every status change or edit writes one row. Powers the progress timeline.
+model BookingEvent {
+  id        String           @id @default(uuid()) @db.Uuid
+  bookingId String           @map("booking_id") @db.Uuid
+  type      BookingEventType
+  actorId   String?          @map("actor_id") @db.Uuid
+  payload   Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId, createdAt])
+  @@map("booking_events")
+}
+
+// Per-year counter so refs read MN-2026-0001, MN-2026-0002, ...
+model BookingRefCounter {
+  year Int @id
+  last Int @default(0)
+
+  @@map("booking_ref_counters")
+}
+
+// ─── Messaging ──────────────────────────────────────────────────────────────
+
+// One conversation per booking (README 8.7), opened by createBooking with a welcome message from
+// support. It has up to three seats:
+//   customer  → the booking's customer
+//   support   → MoveNow staff with support.reply (always present)
+//   moderator → the booking's assigned provider (providerId). Set when dispatch assigns the job and
+//               replaced on reassignment, so only the current pro can see or post in the thread.
+// Each seat keeps its own read pointer, so one side reading never clears another side's badge.
+// Moderators and support can close the thread to customer posts and hide messages
+// (app/lib/server/messaging.ts enforces this).
+model Conversation {
+  id                  String    @id @default(uuid()) @db.Uuid
+  bookingId           String?   @unique @map("booking_id") @db.Uuid
+  customerId          String    @map("customer_id") @db.Uuid
+  providerId          String?   @map("provider_id") @db.Uuid // the moderator
+  moderatorAssignedAt DateTime? @map("moderator_assigned_at")
+  customerReadAt      DateTime? @map("customer_read_at")
+  supportReadAt       DateTime? @map("support_read_at")
+  moderatorReadAt     DateTime? @map("moderator_read_at")
+  closedAt            DateTime? @map("closed_at") // customer can't post while set
+  closedById          String?   @map("closed_by_id") @db.Uuid
+  lastMessageAt       DateTime  @default(now()) @map("last_message_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  booking  Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  customer User      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  closedBy User?     @relation("ConversationsClosed", fields: [closedById], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@index([customerId, lastMessageAt])
+  @@index([providerId, lastMessageAt])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+// Unread for a seat = messages from another seat newer than that seat's read pointer.
+model Message {
+  id             String        @id @default(uuid()) @db.Uuid
+  conversationId String        @map("conversation_id") @db.Uuid
+  senderId       String?       @map("sender_id") @db.Uuid // null for automated support messages
+  author         MessageAuthor
+  body           String
+  attachments    Json?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  hiddenAt       DateTime?     @map("hidden_at") // removed by a moderator or support
+  hiddenById     String?       @map("hidden_by_id") @db.Uuid
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  hiddenBy     User?        @relation("MessagesHidden", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ─── Admin ──────────────────────────────────────────────────────────────────
+
+// One row per staff action (confirm, assign, cancel, provider or staff change...). Never edited.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String // e.g. booking.confirm, provider.update, staff.disable
+  targetType String   @map("target_type") // booking | provider | user | availability_block
+  targetId   String?  @map("target_id")
+  summary    String // readable one-liner shown in the log
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}

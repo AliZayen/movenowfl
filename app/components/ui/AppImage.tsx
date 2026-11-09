@@ -19,6 +19,7 @@ interface AppImageProps {
     fallbackSrc?: string;
     loading?: 'lazy' | 'eager';
     unoptimized?: boolean;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- passes arbitrary props through to the underlying component
     [key: string]: any;
 }
 
@@ -44,7 +45,12 @@ const AppImage = memo(function AppImage({
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
 
-    const isExternalUrl = useMemo(() => typeof imageSrc === 'string' && imageSrc.startsWith('http'), [imageSrc]);
+    // Our own /api images are already resized, and private ones need the viewer's cookie, which the
+    // image optimizer wouldn't send, so those load as-is too.
+    const isExternalUrl = useMemo(
+        () => typeof imageSrc === 'string' && (imageSrc.startsWith('http') || imageSrc.startsWith('/api/') || imageSrc.startsWith('blob:')),
+        [imageSrc],
+    );
     const resolvedUnoptimized = unoptimized || isExternalUrl;
 
     const handleError = useCallback(() => {
@@ -68,6 +74,7 @@ const AppImage = memo(function AppImage({
     }, [className, isLoading, onClick]);
 
     const imageProps = useMemo(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- passes arbitrary props through to the underlying component
         const baseProps: any = {
             src: imageSrc,
             alt,

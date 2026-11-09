@@ -3,13 +3,15 @@ import Icon from '@/app/components/ui/AppIcon';
 
 interface DashboardHeaderProps {
   name: string;
-  upcomingCount: number;
+  upcomingCount: number | null; // null while loading
   onBook: () => void;
 }
 
 export default function DashboardHeader({ name, upcomingCount, onBook }: DashboardHeaderProps) {
   const summary =
-    upcomingCount === 0
+    upcomingCount === null
+      ? 'Loading your bookings…'
+      : upcomingCount === 0
       ? 'You have no upcoming bookings.'
       : `You have ${upcomingCount} upcoming booking${upcomingCount === 1 ? '' : 's'}.`;
 

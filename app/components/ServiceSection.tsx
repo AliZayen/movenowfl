@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import AppImage from '@/app/components/ui/AppImage';
+import { useServicePrices } from '@/app/lib/api/hooks';
 
 const services = [
 {
@@ -9,7 +10,7 @@ const services = [
   icon: 'truck',
   title: 'Moving',
   description: 'Residential, business and office moves — local and long distance.',
-  price: 'From $40',
+  price: 'From $70',
   image: "https://img.rocket.new/generatedImages/rocket_gen_img_1384b98d6-1773100531867.png",
   alt: 'Professional movers carrying cardboard boxes in a bright living room with packed furniture'
 },
@@ -18,7 +19,7 @@ const services = [
   icon: 'wrench',
   title: 'Furniture Assembly',
   description: 'Beds, desks, tables, cabinets and more. Quick and professional service.',
-  price: 'From $40',
+  price: 'From $50',
   image: "https://img.rocket.new/generatedImages/rocket_gen_img_1d34ff377-1772511949473.png",
   alt: 'Technician assembling wooden furniture with tools on a clean hardwood floor in a modern apartment'
 },
@@ -27,13 +28,14 @@ const services = [
   icon: 'monitor',
   title: 'TV Mounting',
   description: 'Secure and clean installation for all TV sizes. Wall mounts and cable management.',
-  price: 'From $80',
+  price: 'From $70',
   image: "https://img.rocket.new/generatedImages/rocket_gen_img_112219723-1772182085582.png",
   alt: 'Technician mounting a large flat screen TV on a white wall in a modern living room'
 }];
 
 
 export default function ServicesSection() {
+  const prices = useServicePrices();
   const sectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function ServicesSection() {
               <h3 className="text-lg font-bold text-foreground-public mb-1">{services?.[0]?.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">{services?.[0]?.description}</p>
               <div className="flex items-center justify-between">
-                <span className="text-base font-bold text-foreground-public">{services?.[0]?.price}</span>
+                <span className="text-base font-bold text-foreground-public">{prices.moving ?? services?.[0]?.price}</span>
                 <Link href="#quote" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
                   Get a quote
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -129,7 +131,7 @@ export default function ServicesSection() {
               <h3 className="text-lg font-bold text-foreground-public mb-1">{services?.[1]?.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">{services?.[1]?.description}</p>
               <div className="flex items-center justify-between">
-                <span className="text-base font-bold text-foreground-public">{services?.[1]?.price}</span>
+                <span className="text-base font-bold text-foreground-public">{prices.furniture_assembly ?? services?.[1]?.price}</span>
                 <Link href="#quote" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
                   Get a quote
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -163,7 +165,7 @@ export default function ServicesSection() {
               <h3 className="text-lg font-bold text-foreground-public mb-1">{services?.[2]?.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">{services?.[2]?.description}</p>
               <div className="flex items-center justify-between">
-                <span className="text-base font-bold text-foreground-public">{services?.[2]?.price}</span>
+                <span className="text-base font-bold text-foreground-public">{prices.tv_mounting ?? services?.[2]?.price}</span>
                 <Link href="#quote" className="text-primary-public-strong text-sm font-bold flex items-center gap-1 hover:gap-2 transition-all">
                   Get a quote
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

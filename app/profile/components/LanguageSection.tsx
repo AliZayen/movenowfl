@@ -44,6 +44,20 @@ function Field({ id, label, icon, value, onChange, options }: FieldProps) {
   );
 }
 
+// Labels shown in the dropdowns ↔ values the API stores.
+export const LANGUAGE_OPTIONS = [
+  { id: 'en', label: 'English' },
+  { id: 'es', label: 'Español' },
+  { id: 'pt', label: 'Português' },
+] as const;
+
+export const TIMEZONE_OPTIONS = [
+  { id: 'America/New_York', label: 'Eastern Time (US & Canada)' },
+  { id: 'America/Chicago', label: 'Central Time (US & Canada)' },
+  { id: 'America/Denver', label: 'Mountain Time (US & Canada)' },
+  { id: 'America/Los_Angeles', label: 'Pacific Time (US & Canada)' },
+] as const;
+
 export default function LanguageSection(props: LanguageSectionProps) {
   return (
     <ProfileCard
@@ -54,12 +68,12 @@ export default function LanguageSection(props: LanguageSectionProps) {
     >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field
-          id="language"
+          id="language-select"
           label="Language"
           icon="GlobeAltIcon"
           value={props.language}
           onChange={props.onLanguage}
-          options={['English', 'Español', 'Português']}
+          options={LANGUAGE_OPTIONS.map((o) => o.label)}
         />
         <Field
           id="timezone"
@@ -67,12 +81,7 @@ export default function LanguageSection(props: LanguageSectionProps) {
           icon="ClockIcon"
           value={props.timezone}
           onChange={props.onTimezone}
-          options={[
-            '(GMT-04:00) Eastern Time (US & Canada)',
-            '(GMT-05:00) Central Time (US & Canada)',
-            '(GMT-07:00) Mountain Time (US & Canada)',
-            '(GMT-08:00) Pacific Time (US & Canada)',
-          ]}
+          options={TIMEZONE_OPTIONS.map((o) => o.label)}
         />
         <Field
           id="date-format"

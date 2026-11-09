@@ -3,6 +3,7 @@
 import React from 'react';
 import Icon from '@/app/components/ui/AppIcon';
 import SectionCard from '@/app/book-service/components/SectionCard';
+import { BRACKETS, labels, TV_MOUNT_TYPES, TV_SIZES, WALL_TYPES } from '@/app/lib/catalog';
 import Select from '@/app/book-service/components/Select';
 
 
@@ -88,7 +89,8 @@ export default function TVMountingDetails(props: TVMountingDetailsProps){
             id="type"
             value={type}
             onChange={onType}
-            options={['Wall mount', 'Above fireplace', 'Ceilling mount']}
+            options={labels(TV_MOUNT_TYPES)}
+            placeholder="Select a mounting type"
           /> 
         </div>
         <div>
@@ -99,7 +101,8 @@ export default function TVMountingDetails(props: TVMountingDetailsProps){
             id="tvSize"
             value={tvSize}
             onChange={onTvSize}
-            options={['32" - 43"', '44" - 55"', '56" - 65"', '66" - 75"', '76" and larger']}
+            options={labels(TV_SIZES)}
+            placeholder="Select a TV size"
           /> 
         </div>
         <div>
@@ -110,7 +113,8 @@ export default function TVMountingDetails(props: TVMountingDetailsProps){
             id="wallType"
             value={wallType}
             onChange={onWallType}
-            options={['Drywall (wood studs)', 'Drywall (metal studs)', 'Brick','Concrete / block','Plaster','Stone veneer']}
+            options={labels(WALL_TYPES)}
+            placeholder="Select a wall type"
           /> 
         </div>
         <div>
@@ -121,7 +125,8 @@ export default function TVMountingDetails(props: TVMountingDetailsProps){
             id="bracket"
             value={bracket}
             onChange={onBracket}
-            options={['flat to wall', 'Tilting', 'Full motion (articulating)', 'Ceiling pole mount', 'I already have a bracket', 'I need you to supply one']}
+            options={labels(BRACKETS)}
+            placeholder="Select a bracket"
           /> 
         </div>
         <div>

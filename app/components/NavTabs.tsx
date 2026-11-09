@@ -4,24 +4,48 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from '@/app/components/ui/AppIcon';
+import { useSession } from '@/app/components/SessionProvider';
+import { useUnreadCount } from '@/app/lib/api/messaging';
 
-const navItems = [
+const customerItems = [
   { id: 'nav-dashboard', label: 'Dashboard', href: '/dashboard', icon: 'HomeIcon' },
   { id: 'nav-bookings', label: 'My Bookings', href: '/my-bookings', icon: 'CalendarDaysIcon' },
-  { id: 'nav-messages', label: 'Messages', href: '/', icon: 'ChatBubbleOvalLeftEllipsisIcon', badge: 2 },
+  { id: 'nav-messages', label: 'Messages', href: '/messages', icon: 'ChatBubbleOvalLeftEllipsisIcon' },
   { id: 'nav-profile', label: 'Profile & Settings', href: '/profile', icon: 'UserIcon' },
 ];
 
+// Pros (role = provider) work in /pro: their assigned jobs and those jobs' conversations.
+const providerItems = [
+  { id: 'nav-jobs', label: 'My Jobs', href: '/pro', icon: 'BriefcaseIcon' },
+  { id: 'nav-messages', label: 'Messages', href: '/messages', icon: 'ChatBubbleOvalLeftEllipsisIcon' },
+  { id: 'nav-profile', label: 'Profile & Settings', href: '/profile', icon: 'UserIcon' },
+];
+
+// Staff only see the shared pages here (the support inbox and their profile); their work is in /admin.
+const adminItems = [
+  { id: 'nav-admin', label: 'Admin', href: '/admin', icon: 'ShieldCheckIcon' },
+  { id: 'nav-messages', label: 'Messages', href: '/messages', icon: 'ChatBubbleOvalLeftEllipsisIcon' },
+  { id: 'nav-profile', label: 'Profile & Settings', href: '/profile', icon: 'UserIcon' },
+];
+
+const ITEMS = { customer: customerItems, provider: providerItems, admin: adminItems };
+
 // Reads the URL, so AppLayout renders it inside <Suspense> with NavTabsView as the fallback.
 export default function NavTabs() {
-  return <NavTabsView pathname={usePathname()} />;
+  const { status, user } = useSession();
+  const unread = useUnreadCount(status === 'authenticated');
+  return <NavTabsView pathname={usePathname()} unread={unread} role={user?.role} />;
 }
 
-export function NavTabsView({ pathname }: { pathname: string | null }) {
+export function NavTabsView({ pathname, unread = 0, role = 'customer' }: { pathname: string | null; unread?: number; role?: keyof typeof ITEMS }) {
+  const navItems = ITEMS[role];
   const isActive = (id: string) => {
     if (!pathname) return false;
+    if (id === 'nav-jobs') return pathname.startsWith('/pro');
+    if (id === 'nav-admin') return pathname.startsWith('/admin');
     if (id === 'nav-dashboard') return pathname === '/dashboard' || pathname.startsWith('/book-service');
     if (id === 'nav-bookings') return pathname.startsWith('/my-bookings');
+    if (id === 'nav-messages') return pathname.startsWith('/messages');
     if (id === 'nav-profile') return pathname.startsWith('/profile');
     return false;
   };
@@ -34,6 +58,7 @@ export function NavTabsView({ pathname }: { pathname: string | null }) {
     >
       {navItems.map((item) => {
         const active = isActive(item.id);
+        const badge = item.id === 'nav-messages' ? unread : 0;
         return (
           <Link
             key={item.id}
@@ -45,11 +70,12 @@ export function NavTabsView({ pathname }: { pathname: string | null }) {
           >
             <Icon name={item.icon} size={20} />
             {item.label}
-            {item.badge ? (
+            {badge > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-strong px-1.5 text-[11px] font-bold text-accent-foreground">
-                {item.badge}
+                <span aria-hidden>{badge > 99 ? '99+' : badge}</span>
+                <span className="sr-only">, {badge} unread</span>
               </span>
-            ) : null}
+            )}
             <span
               className={`absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent transition-all duration-200 ${
                 active ? 'opacity-100' : 'opacity-0'

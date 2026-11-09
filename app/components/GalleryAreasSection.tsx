@@ -1,4 +1,5 @@
 'use client';
+import { useServiceAreas } from '@/app/lib/api/hooks';
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import AppImage from '@/app/components/ui/AppImage';
@@ -22,13 +23,15 @@ const galleryImages = [
 }];
 
 
-const serviceAreas = [
+const fallbackAreas = [
 'Miami-Dade', 'Broward', 'Palm Beach', 'Brickell', 'Wynwood',
 'Coral Gables', 'Doral', 'Aventura'];
 
 
 export default function GalleryAreasSection() {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const areas = useServiceAreas();
+  const serviceAreas = areas ? areas.map((a) => a.name) : fallbackAreas;
 
   useEffect(() => {
     const observer = new IntersectionObserver(

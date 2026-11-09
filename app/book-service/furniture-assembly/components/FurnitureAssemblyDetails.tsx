@@ -3,6 +3,7 @@
 import React from 'react';
 import Icon from '@/app/components/ui/AppIcon';
 import SectionCard from '@/app/book-service/components/SectionCard';
+import { FURNITURE_TYPES, labels } from '@/app/lib/catalog';
 import Select, { inputCls } from '@/app/book-service/components/Select';
 
 
@@ -89,7 +90,8 @@ export default function FurnitureAssemblyDetails(props: FurnitureAssemblyDetails
             id="type"
             value={type}
             onChange={onType}
-            options={['Bed frame', 'Dresser / chest of drawers', 'Wardrobe / armoire', 'Dining table', 'Desk / workstation', 'Bookcase / shelving unit', 'Sofa / sectional','Crib / nursery furniture', 'Patio / outdoor set', 'TV stand / media console']}
+            options={labels(FURNITURE_TYPES)}
+            placeholder="Select a furniture type"
           /> 
         </div>
         <div>

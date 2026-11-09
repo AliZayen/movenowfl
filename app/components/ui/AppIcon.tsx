@@ -14,6 +14,7 @@ interface IconProps {
     className?: string;
     onClick?: () => void;
     disabled?: boolean;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- passes arbitrary props through to the underlying component
     [key: string]: any;
 }
 
@@ -27,6 +28,7 @@ function Icon({
     ...props
 }: IconProps) {
     const iconSet = variant === 'solid' ? HeroIconsSolid : HeroIcons;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- passes arbitrary props through to the underlying component
     const IconComponent = iconSet[name as keyof typeof iconSet] as React.ComponentType<any>;
 
     if (!IconComponent) {

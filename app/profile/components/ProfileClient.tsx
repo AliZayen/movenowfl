@@ -3,41 +3,61 @@
 import React, { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Toast from '@/app/components/ui/Toast';
+import { useSession } from '@/app/components/SessionProvider';
 import SettingsSidebar from '@/app/profile/components/SettingsSidebar';
 import PersonalInfoSection from '@/app/profile/components/PersonalInfoSection';
 import AddressesSection from '@/app/profile/components/AddressesSection';
-import LanguageSection from '@/app/profile/components/LanguageSection';
+import LanguageSection, { LANGUAGE_OPTIONS, TIMEZONE_OPTIONS } from '@/app/profile/components/LanguageSection';
 import NotificationsSection, { NotificationPrefs } from '@/app/profile/components/NotificationsSection';
 import SecuritySection from '@/app/profile/components/SecuritySection';
 import PaymentSection from '@/app/profile/components/PaymentSection';
 import AppearanceSection from '@/app/profile/components/AppearanceSection';
+import { api, errorMessage } from '@/app/lib/api/client';
+import type { ApiUser } from '@/app/lib/api/types';
 
+// RequireAuth (AppLayout) renders this only once the session has loaded, so `user` is set.
 export default function ProfileClient() {
   const router = useRouter();
+  const { user, setUser } = useSession();
+  const u = user!;
   const [toast, setToast] = useState<string | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
   const [active, setActive] = useState('personal');
+  const [saving, setSaving] = useState(false);
 
-  const [name, setName] = useState('John Doe');
-  const [phone, setPhone] = useState('+1 (305) 555-0123');
-  const [address, setAddress] = useState('123 Ocean Dr, Miami, FL, 33139');
-  const [language, setLanguage] = useState('English');
-  const [timezone, setTimezone] = useState('(GMT-04:00) Eastern Time (US & Canada)');
-  const [dateFormat, setDateFormat] = useState('MM/DD/YYYY');
-  const [prefs, setPrefs] = useState<NotificationPrefs>({ booking: true, messages: true, promos: false, news: false });
-  const [theme, setTheme] = useState('light');
+  const [name, setName] = useState(u.fullName);
+  const [phone, setPhone] = useState(u.phone ?? '');
+  const [language, setLanguage] = useState(u.preferences.language);
+  const [timezone, setTimezone] = useState(u.preferences.timezone);
+  const [dateFormat, setDateFormat] = useState(u.preferences.dateFormat);
+  const [prefs, setPrefs] = useState<NotificationPrefs>(u.preferences.notifications);
+  const [theme, setTheme] = useState(u.preferences.theme);
 
   const handleSelect = (id: string) => {
     setActive(id);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleSave = () => {
-    if (!name.trim() || !phone.trim() || !address.trim()) {
-      setToast('Please fill in all required fields');
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setToast('Please enter your full name');
       return;
     }
-    setToast('Your changes have been saved');
+    setSaving(true);
+    try {
+      await api<{ user: ApiUser }>('/me', { method: 'PATCH', body: { fullName: name.trim(), phone: phone.trim() || null } });
+      const { user: updated } = await api<{ user: ApiUser }>('/me/preferences', {
+        method: 'PATCH',
+        body: { language, timezone, dateFormat, theme, notifications: prefs },
+      });
+      setUser(updated);
+      setPhone(updated.phone ?? '');
+      setToast('Your changes have been saved');
+    } catch (e) {
+      setToast(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -49,38 +69,30 @@ export default function ProfileClient() {
           onName={setName}
           phone={phone}
           onPhone={setPhone}
-          address={address}
-          onAddress={setAddress}
+          email={u.email}
+          emailVerified={u.emailVerified}
+          avatarUrl={u.avatarUrl}
           onNotify={setToast}
         />
         <AddressesSection onNotify={setToast} />
-        <LanguageSection
-          language={language}
-          onLanguage={setLanguage}
-          timezone={timezone}
-          onTimezone={setTimezone}
-          dateFormat={dateFormat}
-          onDateFormat={setDateFormat}
-        />
         <NotificationsSection prefs={prefs} onChange={setPrefs} />
-        <SecuritySection onNotify={setToast} />
-        <PaymentSection onNotify={setToast} />
-        <AppearanceSection theme={theme} onTheme={setTheme} />
+        <SecuritySection email={u.email} onNotify={setToast} />
 
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
           <button
             type="button"
-            onClick={() => router?.push('/')}
-            className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:border-accent hover:text-accent active:scale-95"
+            onClick={() => router.push('/dashboard')}
+            className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:border-accent hover:text-accent-strong active:scale-95"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="min-w-48 rounded-lg bg-accent px-8 py-3 text-sm font-bold text-accent-foreground transition-all hover:opacity-90 active:scale-95"
+            disabled={saving}
+            className="min-w-48 rounded-lg bg-accent-strong px-8 py-3 text-sm font-bold text-accent-foreground transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
           >
-            Save Changes
+            {saving ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
       </div>

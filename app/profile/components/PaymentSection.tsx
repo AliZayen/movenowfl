@@ -16,34 +16,20 @@ export default function PaymentSection({ onNotify }: PaymentSectionProps) {
       title="Payment Methods"
       subtitle="Manage your saved payment methods for faster booking."
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {/* TODO: Stripe saved cards (README phase 5). */}
+      <div className="flex items-center gap-4 rounded-xl border-2 border-dashed border-border bg-secondary/40 p-5">
+        <Icon name="CreditCardIcon" size={32} className="shrink-0 text-muted-foreground" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-foreground">Saved cards are coming soon</p>
+          <p className="text-xs text-muted-foreground">For now, your pro collects payment when the job is done.</p>
+        </div>
         <button
           type="button"
-          onClick={() => onNotify('Add payment method (demo)')}
-          className="flex items-center gap-4 rounded-xl border-2 border-dashed border-border bg-secondary/40 p-5 text-left transition-colors hover:border-accent/50"
+          onClick={() => onNotify("We'll let you know when you can save a card")}
+          className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-primary hover:bg-muted"
         >
-          <Icon name="PlusCircleIcon" size={36} className="text-muted-foreground" />
-          <span>
-            <span className="block text-xs font-semibold text-foreground">Add Payment Method</span>
-            <span className="block text-[11px] text-muted-foreground">Credit card, debit card, or Apple Pay</span>
-          </span>
+          Notify me
         </button>
-        <div className="flex items-center gap-4 rounded-xl border border-border p-5">
-          <span className="rounded-md bg-primary px-2 py-1.5 text-[11px] font-extrabold italic text-primary-foreground">VISA</span>
-          <div className="flex-1">
-            <p className="tabular text-sm font-semibold text-foreground">•••• 4242</p>
-            <p className="tabular text-[11px] text-muted-foreground">Expires 05/28</p>
-          </div>
-          <span className="rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">Default</span>
-          <button
-            type="button"
-            aria-label="Card options"
-            onClick={() => onNotify('Card options (demo)')}
-            className="rounded-md p-1 text-muted-foreground hover:bg-secondary"
-          >
-            <Icon name="EllipsisVerticalIcon" size={18} />
-          </button>
-        </div>
       </div>
     </ProfileCard>
   );

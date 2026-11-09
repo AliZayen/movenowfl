@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppImage from '@/app/components/ui/AppImage';
+import { api } from '@/app/lib/api/client';
+import type { ZipCheck } from '@/app/lib/api/types';
 
 const serviceRoutes: Record<string, string> = {
   'Moving': '/book-service/moving',
@@ -30,8 +32,25 @@ export default function HeroSection() {
     e.currentTarget.min = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setZipError(null);
+    setChecking(true);
+    try {
+      // Tell people right away if we don't serve their ZIP, before they fill in the full form.
+      const check = await api<ZipCheck>(`/service-areas/check?zip=${fromZip}`);
+      if (!check.served) {
+        setZipError(`Sorry, we don't serve ${fromZip} yet. Call us and we'll see what we can do.`);
+        return;
+      }
+    } catch {
+      // If the check fails, let them continue; the booking form checks again.
+    } finally {
+      setChecking(false);
+    }
     const params = new URLSearchParams();
     if (fromZip) params.set('fromZip', fromZip);
     if (isMoving && toZip) params.set('toZip', toZip);
@@ -166,7 +185,12 @@ export default function HeroSection() {
                 </div>
 
                 {/* Submit */}
-                <button type="submit" className="btn-primary-public w-full py-3.5 text-base font-bold rounded-lg flex items-center justify-center gap-2 mt-1">
+                {zipError && (
+                  <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+                    {zipError}
+                  </p>
+                )}
+                <button type="submit" disabled={checking} className="disabled:opacity-70 btn-primary-public w-full py-3.5 text-base font-bold rounded-lg flex items-center justify-center gap-2 mt-1">
                   Get My Free Estimate
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M5 12h14M12 5l7 7-7 7" />

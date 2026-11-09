@@ -2,6 +2,7 @@
 
 import React from 'react';
 import SectionCard from '@/app/book-service/components/SectionCard';
+import { HOME_SIZES } from '@/app/lib/catalog';
 
 interface ItemsSizeSectionProps {
   homeType: string;
@@ -14,13 +15,7 @@ interface ItemsSizeSectionProps {
   onNotes: (v: string) => void;
 }
 
-const homeTypes = [
-  { id: 'studio', label: 'Studio', range: '0 - 400 sqft' },
-  { id: '1br', label: '1 Bedroom', range: '401 - 800 sqft' },
-  { id: '2br', label: '2 Bedrooms', range: '801 - 1200 sqft' },
-  { id: '3br', label: '3 Bedrooms', range: '1201 - 1800 sqft' },
-  { id: '4br', label: '4+ Bedrooms', range: '1800+ sqft' },
-];
+const homeTypes = HOME_SIZES.map((h) => ({ id: h.id, label: h.label, range: h.hint }));
 
 const volumes = [
   { id: 'few', label: 'A few items' },

@@ -10,6 +10,7 @@ interface StatusBadgeProps {
 const iconByStatus: Record<BookingStatus, string> = {
   Confirmed: 'CheckCircleIcon',
   Pending: 'ClockIcon',
+  'In progress': 'TruckIcon',
   Completed: 'CheckCircleIcon',
   Cancelled: 'XCircleIcon',
 };

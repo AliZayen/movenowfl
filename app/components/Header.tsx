@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppLogo from '@/app/components/ui/AppLogo';
 import { PHONE_PRIMARY } from '@/app/lib/contact';
+import { useSession } from '@/app/components/SessionProvider';
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -15,6 +16,8 @@ const navLinks = [
 ];
 
 export default function Header() {
+  const { status } = useSession();
+  const account = status === 'authenticated' ? { href: '/dashboard', label: 'My dashboard' } : { href: '/signin', label: 'Sign in' };
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -93,13 +96,10 @@ export default function Header() {
               {PHONE_PRIMARY.display}
             </a>
             <Link
-              href="/quote"
+              href={account.href}
               className="btn-primary-public px-5 py-2.5 text-sm font-bold rounded-lg flex items-center gap-2"
             >
-              Get a Quote
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
+              {account.label}
             </Link>
           </div>
 
@@ -145,14 +145,11 @@ export default function Header() {
               Call {PHONE_PRIMARY.display}
             </a>
             <Link
-              href="/quote"
+              href={account.href}
               onClick={handleLinkClick}
               className="btn-primary-public px-5 py-3 text-base font-bold rounded-lg flex items-center justify-center gap-2"
             >
-              Get a Free Quote
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
+              {account.label}
             </Link>
           </div>
         </div>

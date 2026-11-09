@@ -1,7 +1,8 @@
 import React, { Suspense } from 'react';
 import Topbar from '@/app/components/Topbar';
 import NavTabs, { NavTabsView } from '@/app/components/NavTabs';
-import AppFooter from '@/app/components/AppFooter';
+import Footer from '@/app/components/Footer';
+import RequireAuth from '@/app/components/RequireAuth';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -20,8 +21,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8 2xl:px-16">{children}</main>
-      <AppFooter />
+      <main className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8 2xl:px-16">
+        <RequireAuth>{children}</RequireAuth>
+      </main>
+      <Footer />
     </div>
   );
 }

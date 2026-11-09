@@ -6,11 +6,8 @@ import Icon from '@/app/components/ui/AppIcon';
 export const settingsSections = [
   { id: 'personal', label: 'Personal Information', icon: 'UserIcon' },
   { id: 'addresses', label: 'Saved Addresses', icon: 'MapPinIcon' },
-  { id: 'language', label: 'Language & Region', icon: 'GlobeAltIcon' },
   { id: 'notifications', label: 'Notifications', icon: 'BellIcon' },
   { id: 'security', label: 'Security & Password', icon: 'ShieldCheckIcon' },
-  { id: 'payments', label: 'Payment Methods', icon: 'CreditCardIcon' },
-  { id: 'appearance', label: 'Appearance', icon: 'PaintBrushIcon' },
 ];
 
 interface SettingsSidebarProps {
